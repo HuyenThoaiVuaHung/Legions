@@ -20,24 +20,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22.22.3
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Install locked dependencies
-        run: npm ci
+        run: npm i
 
       # Intentionally no test command: the project release policy is build-only.
       - name: Build production client
         run: npm run build
 
       - name: Upload browser artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: legion-dist
           path: dist/Legion

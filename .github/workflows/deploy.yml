@@ -1,0 +1,83 @@
+name: Deploy
+
+# Pushing to main builds Legion + Legendaries main and deploys to legion.maik.io.vn.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legion-deploy
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build frontend + backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Legion
+        uses: actions/checkout@v7
+
+      - name: Check out Legendaries main
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository_owner }}/Legendaries
+          ref: main
+          path: _backend
+          # Needed only if Legendaries is private; falls back to the default token.
+          token: ${{ secrets.CROSS_REPO_TOKEN || github.token }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22.22.3
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            _backend/package-lock.json
+
+      - name: Build Legion
+        run: |
+          npm i
+          npm run build
+
+      - name: Build Legendary
+        working-directory: _backend
+        run: |
+          npm i
+          npm run typecheck
+          npm run build
+
+      - name: Assemble archive
+        run: |
+          mkdir -p release/legendary
+          cp _backend/package.json _backend/package-lock.json release/legendary/
+          cp -R _backend/dist _backend/assets release/legendary/
+          cp -R dist/Legion release/legendary/Legion
+          echo "{\"frontend\":\"$GITHUB_SHA\",\"backend\":\"$(git -C _backend rev-parse HEAD)\"}" > release/legendary/release-manifest.json
+          tar -C release -czf legendary.tar.gz legendary
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: legendary
+          path: legendary.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy:
+    name: Deploy to production
+    needs: build
+    runs-on: [self-hosted, legion-prod]
+    environment: production
+    steps:
+      - name: Download archive
+        uses: actions/download-artifact@v4
+        with:
+          name: legendary
+
+      - name: Deploy
+        run: sudo /usr/local/bin/legion-deploy "$PWD/legendary.tar.gz"

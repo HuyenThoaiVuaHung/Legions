@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -27,14 +27,14 @@ jobs:
           languages: javascript-typescript
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22.22.3
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Install locked dependencies
-        run: npm ci
+        run: npm i
 
       # Deliberately build-only; no test suite runs in this workflow.
       - name: Build application
