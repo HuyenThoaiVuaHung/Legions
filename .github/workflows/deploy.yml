@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out Legion
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check out Legendaries main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/Legendaries
           ref: main
