@@ -28,7 +28,7 @@ jobs:
       - name: Check out matching Legendary tag
         uses: actions/checkout@v4
         with:
-          repository: HuyenThoaiVuaHung/Legendary
+          repository: ${{ github.repository_owner }}/Legendaries
           ref: v${{ inputs.version }}
           path: _release/Legendary
 
@@ -79,7 +79,7 @@ jobs:
             "version": "$VERSION",
             "frontend": { "repository": "$GITHUB_REPOSITORY", "commit": "$GITHUB_SHA", "tag": "v$VERSION" },
             "backend": {
-              "repository": "HuyenThoaiVuaHung/Legendary",
+              "repository": "${{ github.repository_owner }}/Legendaries",
               "commit": "$(git -C "$BACKEND_DIR" rev-parse HEAD)",
               "tag": "v$VERSION"
             },
@@ -104,3 +104,17 @@ jobs:
           path: legendary-v${{ inputs.version }}.tar.gz
           if-no-files-found: error
           retention-days: 90
+
+  deploy:
+    name: Deploy to production
+    needs: release
+    runs-on: [self-hosted, legion-prod]
+    environment: production
+    steps:
+      - name: Download release archive
+        uses: actions/download-artifact@v4
+        with:
+          name: legendary-v${{ inputs.version }}
+
+      - name: Deploy
+        run: sudo /usr/local/bin/legion-deploy "$PWD/legendary-v${{ inputs.version }}.tar.gz"
