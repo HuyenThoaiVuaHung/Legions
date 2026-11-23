@@ -4,7 +4,7 @@ Production: legion.maik.io.vn on 10.10.9.1. nginx -> 127.0.0.1:3100 -> PM2 proce
 
 Flow: a push to `main` in Legions (or Legendaries, via `trigger-deploy.yml`) runs `deploy.yml`. It builds both repos' `main`, then the self-hosted `legion-prod` runner runs `legion-deploy`: backup, swap code (`match_data` is kept), reload PM2, health check, roll back on failure.
 
-Branches: feature -> PR into `dev` -> merge `dev` into `main` to ship.
+Branches: work on feature branches, merge to `main` to ship.
 
 One-time setup:
 1. `sudo bash deploy/setup-server.sh` on the server.
