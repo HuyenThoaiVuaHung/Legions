@@ -34,7 +34,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install locked dependencies
-        run: npm ci
+        run: npm i
 
       # Deliberately build-only; no test suite runs in this workflow.
       - name: Build application

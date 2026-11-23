@@ -41,13 +41,13 @@ jobs:
 
       - name: Build Legion
         run: |
-          npm ci
+          npm i
           npm run build
 
       - name: Build Legendary
         working-directory: _backend
         run: |
-          npm ci
+          npm i
           npm run typecheck
           npm run build
 

@@ -30,7 +30,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install locked dependencies
-        run: npm ci
+        run: npm i
 
       # Intentionally no test command: the project release policy is build-only.
       - name: Build production client
