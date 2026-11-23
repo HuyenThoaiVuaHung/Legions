@@ -74,8 +74,7 @@ export class EditorVcnvComponent {
       if (file && this.editorDataService.editorData) {
         const cropped = await this.dialogService.openCropDialog(
           file,
-          16,
-          9
+          'vcnv'
         );
         if (cropped) {
           const hosted = this.editorDataService.hosted;

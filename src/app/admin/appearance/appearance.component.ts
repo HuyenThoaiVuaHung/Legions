@@ -29,6 +29,7 @@ import { AssetService } from '../../core/services/asset.service';
 import { ConfigService } from '../../core/services/config.service';
 import { ObsService } from '../../core/services/obs.service';
 import { PaletteService, ThemeMode } from '../../core/services/palette.service';
+import { DialogService, IMAGE_CROP_PRESETS, ImageCropPreset } from '../../editor/services/dialog.service';
 
 /** Preset seed colors offered as quick swatches beside the free picker. */
 const PRESET_SEEDS = [
@@ -49,6 +50,20 @@ const BRAND_ASSETS: readonly BrandAsset[] = [
   { key: 'placeholder', label: 'Ảnh chờ', description: 'Hiển thị trước khi câu hỏi có media được mở.', path: 'misc/placeholder.png' },
   { key: 'icon', label: 'Biểu tượng', description: 'Biểu tượng Legion dùng trong giao diện.', path: 'misc/icon.png' },
 ];
+
+const BRAND_ASSET_CROP_PRESETS: Record<BrandAssetKey, ImageCropPreset> = {
+  logo: 'logo',
+  wordmark: 'wordmark',
+  placeholder: 'placeholder',
+  icon: 'icon',
+};
+
+const ROOM_BRAND_CROP_PRESETS: Record<BrandSlot, ImageCropPreset> = {
+  logo: 'logo',
+  'logo-long': 'wordmark',
+  placeholder: 'placeholder',
+  background: 'background',
+};
 
 /** One editable numeric rule field, grouped into an operator-style tile. */
 type NumericRuleKey = Exclude<
@@ -146,6 +161,7 @@ const RULE_GROUPS: RuleGroup[] = [
 })
 export class AppearanceComponent {
   private readonly api = inject(ApiService);
+  private readonly dialog = inject(DialogService);
   protected readonly assets = inject(AssetService);
   protected readonly palette = inject(PaletteService);
   private readonly snackBar = inject(MatSnackBar);
@@ -187,19 +203,35 @@ export class AppearanceComponent {
     return `${this.assets.image(path)}?v=${this.brandAssetRevision()}`;
   }
 
+  private cropBrandImage(file: File, preset: ImageCropPreset): Promise<File | undefined> {
+    if (preset === 'wordmark') {
+      return this.dialog.openCropDialog(file, {
+        ...IMAGE_CROP_PRESETS.wordmark,
+        allowOriginal: file.type === 'image/png' && file.name.toLowerCase().endsWith('.png'),
+      });
+    }
+    return this.dialog.openCropDialog(file, preset);
+  }
+
   async onBrandAssetSelected(key: BrandAssetKey, event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    if (file.type !== 'image/png') {
-      this.snackBar.open('Ảnh phải là PNG.', 'Đóng');
+    if (!file.type.startsWith('image/')) {
+      this.snackBar.open('Vui lòng chọn tệp hình ảnh.', 'Đóng');
+      input.value = '';
+      return;
+    }
+
+    const cropped = await this.cropBrandImage(file, BRAND_ASSET_CROP_PRESETS[key]);
+    if (!cropped) {
       input.value = '';
       return;
     }
 
     this.uploadingBrandAsset.set(key);
     try {
-      await this.api.uploadBrandAsset(key, file);
+      await this.api.uploadBrandAsset(key, cropped);
       this.brandAssetRevision.update((revision) => revision + 1);
       this.snackBar.open('Đã cập nhật tài sản thương hiệu.', 'Đóng');
     } catch {
@@ -214,13 +246,17 @@ export class AppearanceComponent {
     const input = event?.target as HTMLInputElement | undefined;
     const file = input?.files?.[0];
     if (input && !file) return;
-    if (file && (file.type !== 'image/png' || !file.name.toLowerCase().endsWith('.png'))) {
-      this.snackBar.open('Ảnh phải là PNG.', 'Đóng');
-      input!.value = '';
-      return;
-    }
     try {
-      this.config.apply(file ? await this.api.uploadBrand(slot, file) : await this.api.deleteBrand(slot));
+      let uploadFile: File | undefined;
+      if (file) {
+        if (!file.type.startsWith('image/')) {
+          this.snackBar.open('Vui lòng chọn tệp hình ảnh.', 'Đóng');
+          return;
+        }
+        uploadFile = await this.cropBrandImage(file, ROOM_BRAND_CROP_PRESETS[slot]);
+        if (!uploadFile) return;
+      }
+      this.config.apply(uploadFile ? await this.api.uploadBrand(slot, uploadFile) : await this.api.deleteBrand(slot));
       this.snackBar.open('Đã cập nhật thương hiệu phòng.', 'Đóng');
     } catch (error) {
       this.snackBar.open(error instanceof HttpErrorResponse && typeof error.error?.error === 'string' ? error.error.error : 'Không thể cập nhật thương hiệu.', 'Đóng');

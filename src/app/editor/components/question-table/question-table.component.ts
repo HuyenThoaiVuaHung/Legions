@@ -59,7 +59,12 @@ export class QuestionTableComponent {
   protected async attach(question: IQuestion, index: number, event: Event): Promise<void> {
     const input = event.target;
     if (!(input instanceof HTMLInputElement) || !input.files?.[0]) return;
-    const file = input.files[0];
+    let file: File | undefined = input.files[0];
+    input.value = '';
+    if (file.type.startsWith('image/')) {
+      file = await this.dialogService.openCropDialog(file, 'questionFree');
+      if (!file) return;
+    }
     if (this.hosted && this.context) {
       try {
         if (!await this.hosted.beginQuestion(question, this.questions)) return;

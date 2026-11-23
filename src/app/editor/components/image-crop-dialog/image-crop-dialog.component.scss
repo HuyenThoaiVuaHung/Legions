@@ -11,6 +11,17 @@
   align-items: center;
 }
 
+.cropper-error {
+  padding: 1.5rem 1rem;
+  border-radius: 0.5rem;
+  background-color: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  color: #b91c1c;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
 image-cropper {
   width: 100%;
   height: min(55vh, 460px);

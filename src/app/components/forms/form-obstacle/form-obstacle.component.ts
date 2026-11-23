@@ -9,6 +9,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { VcnvObstacle } from '../../../core/contracts/game';
 import { ApiService } from '../../../core/services/api.service';
 import { uploadObstacleImage } from '../../../core/vcnv-image.util';
+import { DialogService } from '../../../editor/services/dialog.service';
 
 @Component({
   selector: 'app-form-obstacle',
@@ -18,6 +19,7 @@ import { uploadObstacleImage } from '../../../core/vcnv-image.util';
 })
 export class FormObstacleComponent {
   private readonly api = inject(ApiService);
+  private readonly dialogService = inject(DialogService);
   private readonly snackBar = inject(MatSnackBar);
   readonly dialogRef = inject<MatDialogRef<FormObstacleComponent, VcnvObstacle>>(MatDialogRef);
   private readonly initial = inject<VcnvObstacle>(MAT_DIALOG_DATA);
@@ -29,12 +31,16 @@ export class FormObstacleComponent {
   readonly uploadingImage = signal(false);
 
   async onImageSelected(event: Event): Promise<void> {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
     if (!file) return;
+    const cropped = await this.dialogService.openCropDialog(file, 'vcnv');
+    if (!cropped) return;
 
     this.uploadingImage.set(true);
     try {
-      Object.assign(this.form, await uploadObstacleImage(this.api, file));
+      Object.assign(this.form, await uploadObstacleImage(this.api, cropped));
     } catch {
       this.snackBar.open('Không thể tải hoặc xử lý hình ảnh chướng ngại vật.', 'Đóng');
     } finally {

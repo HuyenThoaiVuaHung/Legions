@@ -9,6 +9,7 @@ import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { KdQuestion } from '../../../core/contracts/game';
 import { ApiService } from '../../../core/services/api.service';
+import { DialogService } from '../../../editor/services/dialog.service';
 
 @Component({
   selector: 'app-form-q-kd',
@@ -29,6 +30,7 @@ import { ApiService } from '../../../core/services/api.service';
 })
 export class FormQKdComponent {
   private readonly api = inject(ApiService);
+  private readonly dialogService = inject(DialogService);
   private readonly snackBar = inject(MatSnackBar);
   readonly dialogRef = inject<MatDialogRef<FormQKdComponent, KdQuestion>>(MatDialogRef);
   private readonly initial = inject<KdQuestion>(MAT_DIALOG_DATA);
@@ -38,8 +40,14 @@ export class FormQKdComponent {
   readonly uploading = signal(false);
 
   async onMediaSelected(event: Event): Promise<void> {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    let file: File | undefined = input.files?.[0];
+    input.value = '';
     if (!file) return;
+    if (this.form.type === 'P' || file.type.startsWith('image/')) {
+      file = await this.dialogService.openCropDialog(file, 'questionFree');
+      if (!file) return;
+    }
 
     this.uploading.set(true);
     try {

@@ -33,6 +33,7 @@ const ALL_ROW_IDS = [1, 2, 3, 4, 5];
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CnvViewerComponent } from '../../editor/components/cnv-viewer/cnv-viewer.component';
+import { DialogService } from '../../editor/services/dialog.service';
 import { VCNV_PIECE_COUNT, fetchObstaclePieceUrls, uploadObstacleImage } from '../../core/vcnv-image.util';
 import { ResizeGroupDirective } from '../../components/resizable/resize-group.directive';
 
@@ -66,6 +67,7 @@ export class ControlVcnvComponent {
   private readonly network = inject(NetworkService);
   protected readonly clock = inject(ClockService);
   private readonly dialog = inject(MatDialog);
+  private readonly dialogService = inject(DialogService);
   private readonly snackBar = inject(MatSnackBar);
   protected readonly media = inject(MediaService);
   protected readonly session = inject(SessionService);
@@ -224,13 +226,16 @@ export class ControlVcnvComponent {
   async onObstacleImage(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-    const round = this.round();
     input.value = '';
-    if (!file || !round) return;
+    if (!file || !this.round()) return;
+    const cropped = await this.dialogService.openCropDialog(file, 'vcnv');
+    if (!cropped) return;
+    const round = this.round();
+    if (!round) return;
     this.uploadingObstacle.set(true);
     try {
       const updated = structuredClone(round);
-      Object.assign(updated.obstacle, await uploadObstacleImage(this.api, file));
+      Object.assign(updated.obstacle, await uploadObstacleImage(this.api, cropped));
       this.round.set(await this.api.putRound('vcnv', updated));
     } catch {
       this.snackBar.open('Không thể tải hoặc xử lý hình ảnh chướng ngại vật.', 'Đóng');

@@ -1,18 +1,31 @@
 <h3 mat-dialog-title>
-  <strong>Cắt ảnh</strong>
+  <strong>{{ dialogTitle }}</strong>
 </h3>
 <mat-dialog-content class="cropper-dialog-content">
-  <div class="cropper-wrap">
-    <image-cropper
-      [imageFile]="data.image"
-      (imageCropped)="imageCropped($event)"
-      [maintainAspectRatio]="true"
-      [aspectRatio]="data.aspectRatioX / data.aspectRatioY"
-      format="png"
-    ></image-cropper>
-  </div>
+  @if (loadFailed) {
+    <div class="cropper-error" role="alert">
+      Không thể tải ảnh. Tệp ảnh có thể bị hỏng hoặc không được hỗ trợ. Vui lòng chọn tệp ảnh hợp lệ (PNG, JPG, WebP, ...).
+    </div>
+  } @else {
+    <div class="cropper-wrap">
+      <image-cropper
+        [imageFile]="data.image"
+        (imageCropped)="imageCropped($event)"
+        (loadImageFailed)="onLoadImageFailed()"
+        [maintainAspectRatio]="maintainAspectRatio"
+        [aspectRatio]="aspectRatio"
+        [resizeToWidth]="resizeToWidth"
+        [resizeToHeight]="resizeToHeight"
+        [onlyScaleDown]="onlyScaleDown"
+        format="png"
+      ></image-cropper>
+    </div>
+  }
 </mat-dialog-content>
 <mat-dialog-actions align="end">
   <button mat-stroked-button mat-dialog-close>Hủy</button>
-  <button mat-flat-button [disabled]="!resultImage" [mat-dialog-close]="resultImage">Lưu</button>
+  @if (allowOriginal && !loadFailed) {
+    <button mat-stroked-button [mat-dialog-close]="data.image">Giữ nguyên</button>
+  }
+  <button mat-flat-button [disabled]="!resultImage || loadFailed" [mat-dialog-close]="resultImage">Lưu</button>
 </mat-dialog-actions>

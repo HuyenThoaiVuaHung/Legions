@@ -139,8 +139,8 @@ export class EditorTtComponent {
         return;
       }
       this.mediaError = '';
-      if (this.allowedImageTypes.has(file.type) && file.type !== 'image/gif') {
-        file = await this.dialogService.openCropDialog(file, 16, 9);
+      if (this.allowedImageTypes.has(file.type)) {
+        file = await this.dialogService.openCropDialog(file, 'tt');
         if (!file) return;
       }
       const hosted = this.editorDataService.hosted;

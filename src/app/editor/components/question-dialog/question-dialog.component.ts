@@ -9,6 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
+import { DialogService } from '../../services/dialog.service';
 
 @Component({
   selector: 'app-question-dialog',
@@ -33,6 +34,7 @@ import { MatIconModule } from '@angular/material/icon';
 })
 export class QuestionDialog {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dialogService = inject(DialogService);
   constructor(@Inject(MAT_DIALOG_DATA) public data: {
     question: IQuestion,
     valueList?: number[]
@@ -60,18 +62,22 @@ export class QuestionDialog {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*, video/*, audio/*';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (file) {
-        if (this.mediaBlobUrl) URL.revokeObjectURL(this.mediaBlobUrl);
-        this.error = undefined;
-        this.media = file;
-        this.mediaBlobUrl = URL.createObjectURL(file);
-      }
-      else {
+    input.onchange = async () => {
+      let file: File | undefined = input.files?.[0];
+      input.value = '';
+      if (!file) {
         this.error = 'No file selected.';
+        return;
       }
-    }
+      if (file.type.startsWith('image/')) {
+        file = await this.dialogService.openCropDialog(file, 'questionFree');
+        if (!file) return;
+      }
+      if (this.mediaBlobUrl) URL.revokeObjectURL(this.mediaBlobUrl);
+      this.error = undefined;
+      this.media = file;
+      this.mediaBlobUrl = URL.createObjectURL(file);
+    };
     input.click();
   }
 

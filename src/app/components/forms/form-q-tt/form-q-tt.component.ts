@@ -42,16 +42,14 @@ export class FormQTtComponent {
 
   async onQuestionImageSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
-    let file: File | undefined = input.files?.[0];
+    const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    if (file.type !== 'image/gif') {
-      file = await this.dialogService.openCropDialog(file, 16, 9);
-      if (!file) return;
-    }
+    const cropped = await this.dialogService.openCropDialog(file, 'tt');
+    if (!cropped) return;
     this.uploadingQuestionImage.set(true);
     try {
-      const { fileName } = await this.api.uploadMedia('tt', file);
+      const { fileName } = await this.api.uploadMedia('tt', cropped);
       this.form.questionImage = fileName;
     } catch {
       this.snackBar.open('Không thể tải ảnh câu hỏi lên máy chủ.', 'Đóng');
@@ -62,16 +60,14 @@ export class FormQTtComponent {
 
   async onAnswerImageSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
-    let file: File | undefined = input.files?.[0];
+    const file = input.files?.[0];
     input.value = '';
     if (!file) return;
-    if (file.type !== 'image/gif') {
-      file = await this.dialogService.openCropDialog(file, 16, 9);
-      if (!file) return;
-    }
+    const cropped = await this.dialogService.openCropDialog(file, 'tt');
+    if (!cropped) return;
     this.uploadingAnswerImage.set(true);
     try {
-      const { fileName } = await this.api.uploadMedia('tt', file);
+      const { fileName } = await this.api.uploadMedia('tt', cropped);
       this.form.answerImage = fileName;
     } catch {
       this.snackBar.open('Không thể tải ảnh đáp án lên máy chủ.', 'Đóng');

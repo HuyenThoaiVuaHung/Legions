@@ -17,6 +17,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { IMiscMedia, Pallette } from '../editor.interfaces';
 import { EditorMediaService } from '../services/editor.media.service';
+import { DialogService, ImageCropPreset } from '../services/dialog.service';
 import { HostedSettingsDirective } from '../services/hosted-settings.directive';
 
 @Component({
@@ -47,9 +48,17 @@ import { HostedSettingsDirective } from '../services/hosted-settings.directive';
   styleUrl: './general.component.scss'
 })
 export class EditorGeneralComponent {
+  private readonly cropPresets: Record<string, ImageCropPreset> = {
+    logo: 'logo',
+    'logo-long': 'wordmark',
+    placeholder: 'placeholder',
+    background: 'background',
+    players: 'contestant',
+  };
   constructor(
     public editorDataService: EditorDataService,
-    public mediaService: EditorMediaService
+    public mediaService: EditorMediaService,
+    private dialogService: DialogService
   ) {
   }
   public matchVersionSnapshot = this.editorDataService.editorData?.matchData.matchVersion!;
@@ -58,19 +67,21 @@ export class EditorGeneralComponent {
     this.editorDataService.saveCurrentEditorData();
   }
   public async handleImageChange(file: File, type: keyof IMiscMedia, index?: number) {
-    if (this.editorDataService.editorData) {
-      if (type !== 'players') this.editorDataService.editorData.uiConfig.miscImageSrcNames[type] = await this.mediaService.setMedia(this.editorDataService.editorData?.uid!, file, 'misc');
-      else {
-        if (!this.editorDataService.editorData.uiConfig.miscImageSrcNames.players) this.editorDataService.editorData.uiConfig.miscImageSrcNames.players = new Array(this.editorDataService.editorData.matchData.players.length).fill('');
-
-        const fn = await this.mediaService.setMedia(this.editorDataService.editorData?.uid!, file, 'misc');
-        this.editorDataService.editorData.uiConfig.miscImageSrcNames.players[index!] = fn;
-        console.log(fn, type, index, 'check')
-        console.log(this.editorDataService.editorData.uiConfig.miscImageSrcNames, 'check');
+    if (!this.editorDataService.editorData) return;
+    const preset = this.cropPresets[String(type)];
+    const cropped = preset ? await this.dialogService.openCropDialog(file, preset) : file;
+    if (!cropped || !this.editorDataService.editorData) return;
+    if (type !== 'players') {
+      this.editorDataService.editorData.uiConfig.miscImageSrcNames[type] = await this.mediaService.setMedia(this.editorDataService.editorData.uid, cropped, 'misc');
+    } else {
+      if (!this.editorDataService.editorData.uiConfig.miscImageSrcNames.players) {
+        this.editorDataService.editorData.uiConfig.miscImageSrcNames.players = new Array(this.editorDataService.editorData.matchData.players.length).fill('');
       }
-      this.editorDataService.editorData = await this.editorDataService.resolveMediaSrcs(this.editorDataService.editorData);
-      this.editorDataService.saveCurrentEditorData();
+      const fn = await this.mediaService.setMedia(this.editorDataService.editorData.uid, cropped, 'misc');
+      this.editorDataService.editorData.uiConfig.miscImageSrcNames.players[index!] = fn;
     }
+    this.editorDataService.editorData = await this.editorDataService.resolveMediaSrcs(this.editorDataService.editorData);
+    this.editorDataService.saveCurrentEditorData();
   }
 
 }
