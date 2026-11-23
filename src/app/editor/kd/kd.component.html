@@ -1,7 +1,7 @@
 @if (this.editorDataService.editorData) { @if (
-this.editorDataService.editorData.matchData.matchVersion == 24 ) {
-<h3 class="mb-6 flex items-center gap-5">
-  <strong>Phần thi</strong>
+this.editorDataService.editorData.matchData.matchVersion !== 23 ) {
+<div class="mb-3 flex flex-wrap items-center gap-4">
+  <span class="mat-label-large opacity-75">Phần thi</span>
   <mat-form-field appearance="outline" subscriptSizing="dynamic">
     <mat-select [(value)]="selectedO24Control">
       <mat-option [value]="controlType.SINGLEPLAYER"> Cá nhân </mat-option>
@@ -9,7 +9,7 @@ this.editorDataService.editorData.matchData.matchVersion == 24 ) {
     </mat-select>
   </mat-form-field>
   @if (this.selectedO24Control == this.controlType.SINGLEPLAYER) {
-  <strong>Thí sinh</strong>
+  <span class="mat-label-large opacity-75">Thí sinh</span>
   <mat-form-field appearance="outline" subscriptSizing="dynamic">
     <mat-select [(value)]="selectedO24SingleplayerPlayerIndex">
       @for (player of this.editorDataService.editorData.matchData.players; track
@@ -21,10 +21,10 @@ this.editorDataService.editorData.matchData.matchVersion == 24 ) {
     </mat-select>
   </mat-form-field>
   }
-</h3>
+</div>
 } @else if(this.editorDataService.editorData.matchData.matchVersion == 23) {
-<h3 class="mb-6 flex items-center gap-5">
-  <strong>Gói câu hỏi</strong>
+<div class="mb-3 flex flex-wrap items-center gap-3">
+  <span class="mat-label-large opacity-75">Gói câu hỏi</span>
   @for (_ of [0,1,2]; track $index) {
   <button
     mat-stroked-button
@@ -34,10 +34,10 @@ this.editorDataService.editorData.matchData.matchVersion == 24 ) {
     {{ 8 + $index * 4 }}
   </button>
   }
-</h3>
+</div>
 }
 <div class="w-full h-max relative">
-  @if (this.editorDataService.editorData.matchData.matchVersion === 24) {
+  @if (this.editorDataService.editorData.matchData.matchVersion !== 23) {
   @if(this.selectedO24Control === controlType.MULTIPLAYER){
   <question-table
     [questions]="

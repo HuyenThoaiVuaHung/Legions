@@ -28,7 +28,9 @@ export class ImageCropDialog {
     }
   ){
   }
-  imageCropped(event: ImageCroppedEvent){
-    this.resultImage = new File([event.blob!], this.data.image.name, { type: this.data.image.type });
+  imageCropped(event: ImageCroppedEvent) {
+    if (!event.blob) return;
+    const base = this.data.image.name.replace(/\.[^.]+$/, '') || 'image';
+    this.resultImage = new File([event.blob], `${base}.png`, { type: 'image/png' });
   }
 }

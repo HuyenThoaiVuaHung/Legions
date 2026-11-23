@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { EditorDataService } from './services/editor.data.service';
 import { Component, Input, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, ActivatedRouteSnapshot, Router, RouterLinkActive, RouterModule } from '@angular/router';
@@ -10,12 +11,15 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { EditorStatus } from './services/enums/editor.enum';
 import { FileHandlerService } from './services/file.handler.service';
 import { Crumb, NavbarComponent } from '../components/navbar/navbar.component';
 import { Role } from '../core/contracts/api';
 import { SessionService } from '../core/services/session.service';
+import { inject, signal } from '@angular/core';
+import { LocalBankPublisher } from '../host/local-bank-publisher.service';
 
 @Component({
   selector: 'app-editor',
@@ -31,6 +35,7 @@ import { SessionService } from '../core/services/session.service';
     MatSelectModule,
     MatDividerModule,
     MatMenuModule,
+    MatToolbarModule,
     MatTooltipModule,
     NavbarComponent
   ],
@@ -38,6 +43,61 @@ import { SessionService } from '../core/services/session.service';
   styleUrl: './editor.component.scss'
 })
 export class EditorComponent implements OnInit {
+  private readonly publisher = inject(LocalBankPublisher);
+  private readonly location = inject(Location);
+  protected readonly publishing = signal(false);
+  protected readonly publishError = signal('');
+  protected get hosted(): boolean { return this.router.url.startsWith('/host/drafts'); }
+  protected get draftList(): boolean { return this.router.url.split(/[?#]/)[0].replace(/\/$/, '') === '/host/drafts'; }
+  protected get editorBase(): string { return this.hosted ? '/host/drafts' : '/editor'; }
+  protected async publish(): Promise<void> {
+    const data = this.editorDataService.editorData;
+    if (!data || this.publishing()) return;
+    this.publishing.set(true);
+    this.publishError.set('');
+    try { const id = await this.publisher.publish(data.uid); await this.router.navigate(['/host/bank', id]); }
+    catch { this.publishError.set('Chưa lưu được vào tài khoản. Bản nháp vẫn ở trình duyệt này. Hãy thử lại.'); }
+    finally { this.publishing.set(false); }
+  }
+  protected async importFile(kind: 'legion' | 'excel'): Promise<void> {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = kind === 'legion' ? '.legion,.lg' : '.xlsx,.xls';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      this.publishError.set('');
+      try {
+        const uid = kind === 'legion'
+          ? await this.fileHandler.loadEditorData(file)
+          : await this.fileHandler.loadExcelData(file);
+        await this.editorDataService.setEditorData(await this.editorDataService.loadLocalEditorData(uid));
+        await this.router.navigate([`${this.editorBase}/general`]);
+      } catch (err) {
+        this.publishError.set(err instanceof Error ? err.message : 'Không thể nhập tệp.');
+      }
+    };
+    input.click();
+  }
+  protected async createNew(): Promise<void> {
+    const tab = window.open('about:blank', '_blank');
+    try {
+      const data = this.editorDataService.provideNewEditorData();
+      await this.editorDataService.saveLocalEditorData(data);
+      const url = this.location.prepareExternalUrl(
+        this.router.serializeUrl(this.router.createUrlTree([`${this.editorBase}/general`], { queryParams: { uid: data.uid } })),
+      );
+      if (tab && !tab.closed) {
+        tab.opener = null;
+        tab.location.href = url;
+      } else {
+        await this.editorDataService.setEditorData(data);
+        await this.router.navigate([`${this.editorBase}/general`]);
+      }
+    } catch {
+      tab?.close();
+    }
+  }
   @Input() editorData?: IEditorData;
   constructor(
     public editorDataService: EditorDataService,
@@ -62,7 +122,7 @@ export class EditorComponent implements OnInit {
       if (this.editorDataService.availableEditorDataUids.includes(uid))
         this.editorDataService.editorData = await this.editorDataService.loadLocalEditorData(uid);
       else {
-        this.router.navigate(['/editor']);
+        this.router.navigate([this.editorBase]);
         return;
       }
     }

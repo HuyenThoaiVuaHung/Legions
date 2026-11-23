@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { MatFabButton } from '@angular/material/button';
 import { Role } from '../../core/contracts/api';
 import { ChpQuestion, ChpRound } from '../../core/contracts/game';
@@ -41,10 +41,26 @@ export class PlayerChpComponent {
 
   constructor() {
     void this.loadRound();
+    this.network.emit('request-live-state');
+
+    effect(() => {
+      const snapshot = this.session.liveState();
+      if (!snapshot) return;
+      this.time.set(snapshot.clock.remaining);
+      this.question.set(snapshot.chp.question);
+      this.turnIndex.set(snapshot.chp.turnPlayerIndex);
+      const alreadyPlayed = untracked(() => {
+        const index = this.session.playerIndex();
+        return index !== null && this.round()?.playedPlayers[index] === true;
+      });
+      this.answerButtonDisabled.set(!snapshot.chp.buzzerOpen || alreadyPlayed);
+    });
 
     const offs = [
       this.network.on<[string]>('play-sfx', (code) => this.sfx.play(code)),
-      this.network.on<[ChpQuestion]>('update-chp-question', (data) => this.question.set(data)),
+      this.network.on<[ChpQuestion]>('update-chp-question', (data) =>
+        this.question.set(data && typeof data.question === 'string' ? data : null),
+      ),
       this.network.on<[number]>('got-turn-chp', (playerIndex) => this.turnIndex.set(playerIndex)),
       this.network.on<[]>('clear-turn-chp', () => this.turnIndex.set(-1)),
       this.network.on<[]>('unlock-button-chp', () => this.answerButtonDisabled.set(false)),

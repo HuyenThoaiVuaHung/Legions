@@ -1,6 +1,6 @@
 @if (editorDataService.editorData) {
-<h3 class="mb-6 flex items-center gap-5">
-  <strong>Thí sinh số</strong>
+<div class="mb-3 flex flex-wrap items-center gap-3">
+  <span class="mat-label-large opacity-75">Thí sinh số</span>
   @for (playerIndex of [0,1,2,3]; track playerIndex) {
   <button
     mat-stroked-button
@@ -10,6 +10,6 @@
     {{ playerIndex + 1 }}
   </button>
   }
-</h3>
+</div>
 <question-table mediaPlacement="inline" context="vd" (questionsChangeEvent)="editorDataService.saveCurrentEditorData()" [questions]="editorDataService.editorData.questionBank.vd.questions[selectedPlayerIndex]"></question-table>
 }

@@ -1,0 +1,119 @@
+<h2 mat-dialog-title class="share-title">Chia sẻ “{{ data.name }}”</h2>
+<mat-dialog-content>
+  @if (data.access === 'owner') {
+    <form class="share-form" (ngSubmit)="invite()">
+      @if (selectedPerson(); as person) {
+        <mat-chip-set aria-label="Tài khoản được mời">
+          <mat-chip (removed)="resetInvite()">{{ person }}
+            <button matChipRemove type="button" [attr.aria-label]="'Bỏ chọn ' + person"><mat-icon>close</mat-icon></button>
+          </mat-chip>
+        </mat-chip-set>
+        <div class="share-invite-actions">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="share-role">
+            <mat-label>Quyền truy cập</mat-label>
+            <mat-select name="access" [(ngModel)]="access">
+              <mat-option value="editor">{{ roleLabel.editor }}</mat-option>
+              <mat-option value="viewer">{{ roleLabel.viewer }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <button mat-button type="button" (click)="resetInvite()">Hủy</button>
+          <button mat-flat-button type="submit" [disabled]="sharing()">Mời</button>
+        </div>
+      } @else {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="share-account">
+          <mat-label>Thêm người</mat-label>
+          <input matInput name="username" [ngModel]="username" (ngModelChange)="search($event)"
+            [matAutocomplete]="accounts" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="32" />
+          <mat-icon matSuffix>person_add</mat-icon>
+        </mat-form-field>
+        <mat-autocomplete #accounts="matAutocomplete" (optionSelected)="choosePerson($event.option.value)">
+          @for (account of suggestedAccounts(); track account) {
+            <mat-option [value]="account"><mat-icon>person_outline</mat-icon>{{ account }}</mat-option>
+          }
+          @if (searchStatus() === 'loading') { <mat-option disabled>Đang tìm tài khoản…</mat-option> }
+          @if (searchStatus() === 'done' && !suggestedAccounts().length) { <mat-option disabled>Không tìm thấy tài khoản</mat-option> }
+          @if (searchStatus() === 'error') { <mat-option disabled>Không thể tìm tài khoản. Hãy thử lại.</mat-option> }
+        </mat-autocomplete>
+      }
+    </form>
+  }
+
+  <section class="share-people" aria-labelledby="share-people-heading">
+    <h3 id="share-people-heading" class="mat-title-medium">Người có quyền truy cập</h3>
+    <ul class="member-list">
+      @if ((sharingData()?.ownerName || (data.access === 'owner' ? data.accountName : '')); as ownerName) {
+        <li class="member">
+          <span class="member-avatar owner-avatar" aria-hidden="true">{{ ownerName.slice(0, 1).toUpperCase() }}</span>
+          <strong class="member-name">{{ ownerName }} @if (data.access === 'owner') { <small>(bạn)</small> }</strong>
+          <span class="member-role">Chủ sở hữu</span>
+        </li>
+      }
+      @for (member of members(); track member.accountId) {
+        <li class="member">
+          <span class="member-avatar" aria-hidden="true">{{ member.username.slice(0, 1).toUpperCase() }}</span>
+          <strong class="member-name">{{ member.username }}</strong>
+          @if (data.access === 'owner') {
+            <button mat-button [matMenuTriggerFor]="memberMenu" [disabled]="sharing()"
+              [attr.aria-label]="'Quyền của ' + member.username + ': ' + roleLabel[member.access]">
+              {{ roleLabel[member.access] }} <mat-icon iconPositionEnd>expand_more</mat-icon>
+            </button>
+            <mat-menu #memberMenu="matMenu">
+              <button mat-menu-item (click)="share(member.username, 'editor')" [disabled]="member.access === 'editor'">
+                <mat-icon>{{ member.access === 'editor' ? 'check' : 'edit' }}</mat-icon>{{ roleLabel.editor }}
+              </button>
+              <button mat-menu-item (click)="share(member.username, 'viewer')" [disabled]="member.access === 'viewer'">
+                <mat-icon>{{ member.access === 'viewer' ? 'check' : 'visibility' }}</mat-icon>{{ roleLabel.viewer }}
+              </button>
+              <button mat-menu-item (click)="share(member.username, null)"><mat-icon>person_remove</mat-icon>Xóa quyền truy cập</button>
+            </mat-menu>
+          } @else {
+            <span class="member-role">{{ roleLabel[member.access] }}</span>
+          }
+        </li>
+      }
+    </ul>
+  </section>
+
+  @if (sharingData()?.link; as link) {
+    <section class="share-general" aria-labelledby="share-general-heading">
+      <h3 id="share-general-heading" class="mat-title-medium">Quyền truy cập chung</h3>
+      <div class="share-link-access">
+        <span class="member-avatar"><mat-icon aria-hidden="true">{{ link.mode === 'link' ? 'link' : 'lock_outline' }}</mat-icon></span>
+        <div class="share-link-mode">
+          @if (data.access === 'owner') {
+            <button mat-button [matMenuTriggerFor]="linkMode" [disabled]="sharing()">
+              {{ link.mode === 'link' ? 'Ai có liên kết' : 'Hạn chế' }} <mat-icon iconPositionEnd>expand_more</mat-icon>
+            </button>
+            <mat-menu #linkMode="matMenu">
+              <button mat-menu-item (click)="changeLink('restricted')" [disabled]="link.mode === 'restricted'"><mat-icon>lock_outline</mat-icon>Hạn chế</button>
+              <button mat-menu-item (click)="changeLink('link')" [disabled]="link.mode === 'link'"><mat-icon>link</mat-icon>Ai có liên kết</button>
+            </mat-menu>
+          } @else {
+            <strong>{{ link.mode === 'link' ? 'Ai có liên kết' : 'Hạn chế' }}</strong>
+          }
+        </div>
+        @if (link.mode === 'link' && data.access === 'owner') {
+          <button mat-button class="share-link-role" [matMenuTriggerFor]="linkRole" [disabled]="sharing()">
+            {{ roleLabel[link.access] }} <mat-icon iconPositionEnd>expand_more</mat-icon>
+          </button>
+          <mat-menu #linkRole="matMenu">
+            <button mat-menu-item (click)="changeLink('link', 'viewer')" [disabled]="link.access === 'viewer'">{{ roleLabel.viewer }}</button>
+            <button mat-menu-item (click)="changeLink('link', 'editor')" [disabled]="link.access === 'editor'">{{ roleLabel.editor }}</button>
+          </mat-menu>
+        }
+        <p class="share-link-description" [class.with-trigger]="data.access === 'owner'">
+          {{ link.mode === 'link' ? 'Người có liên kết phải đăng nhập để mở bộ câu hỏi.' : 'Chỉ những người được cấp quyền mới mở được bộ câu hỏi.' }}
+        </p>
+      </div>
+    </section>
+  } @else if (!shareError()) {
+    <p role="status">Đang tải quyền truy cập…</p>
+  }
+  @if (shareError(); as message) { <p role="alert" class="text-[var(--mat-sys-error)]">{{ message }}</p> }
+</mat-dialog-content>
+<mat-dialog-actions class="share-actions">
+  <button mat-stroked-button [disabled]="!sharingData() || sharing()" (click)="copyShareLink()">
+    <mat-icon>{{ linkCopied() ? 'check' : 'link' }}</mat-icon>{{ linkCopied() ? 'Đã sao chép' : 'Sao chép liên kết' }}
+  </button>
+  <button mat-flat-button mat-dialog-close>Xong</button>
+</mat-dialog-actions>

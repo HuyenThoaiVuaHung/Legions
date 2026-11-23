@@ -15,9 +15,10 @@ import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+import { NameDialogComponent, NameDialogData } from '../../components/name-dialog/name-dialog.component';
 import { ConfirmationDialogComponent } from '../../components/operator-dialog/confirmation-dialog.component';
 import { STORAGE_KEYS } from '../../core/constants';
-import { BankItem, LinkRole, RoomInfo, RoomLink, RoomSecrets, SpectatorMode } from '../../core/contracts/api';
+import { BankItem, LinkRole, RoomInfo, RoomLink, RotateSecretRole, SpectatorMode } from '../../core/contracts/api';
 import { ApiService } from '../../core/services/api.service';
 import { SessionService } from '../../core/services/session.service';
 import { queryParamState } from '../../core/query-param';
@@ -50,21 +51,47 @@ export class RoomComponent {
     this.openPanels.set(open.size ? [...open].join(',') : 'none');
   }
   protected readonly now = signal(Date.now());
-  protected readonly revealed = signal<Partial<Record<keyof RoomSecrets, boolean>>>({});
-  protected readonly roles: readonly { key: keyof RoomSecrets; label: string }[] = [
+  protected readonly revealed = signal<Record<string, boolean>>({});
+  protected readonly staffRoles: readonly { key: 'admin' | 'mc' | 'spectator'; label: string }[] = [
     { key: 'admin', label: 'Quản trị' }, { key: 'mc', label: 'MC' },
-    { key: 'player', label: 'Thí sinh' }, { key: 'spectator', label: 'Khán giả' },
+    { key: 'spectator', label: 'Khán giả' },
   ];
+  protected playerLabel(index: number): string {
+    const name = this.session.match()?.players?.[index]?.name?.trim();
+    return name ? `Thí sinh ${index + 1} (${name})` : `Thí sinh ${index + 1}`;
+  }
+  protected linkSummary(link: RoomLink): string {
+    const roleLabel = link.role === 'player'
+      ? (link.playerIndex !== undefined ? this.playerLabel(link.playerIndex) : 'Thí sinh')
+      : link.role === 'mc' ? 'MC' : 'Khán giả';
+    const viewLabel = link.view ? (this.viewOptions.find((o) => o.value === link.view)?.label ?? link.view) : '';
+    return viewLabel ? `${roleLabel} · ${viewLabel}` : roleLabel;
+  }
   protected readonly countdown = computed(() => {
     const expiry = this.session.roomExpiring() ?? this.room()?.expiresAt;
     if (!expiry) return 'Không xác định';
     const seconds = Math.max(0, Math.ceil((expiry - this.now()) / 1000));
     return this.formatDuration(seconds);
   });
+  protected readonly viewOptions: readonly { value: string; label: string }[] = [
+    { value: 'points', label: 'Bảng điểm' },
+    { value: 'waiting', label: 'Màn hình chờ' },
+    { value: 'sc-khoi-dong', label: 'OBS: Khởi động' },
+    { value: 'sc-question-bar', label: 'OBS: Thanh câu hỏi' },
+    { value: 'sc-ve-dich', label: 'OBS: Về đích' },
+    { value: 'kd', label: 'Khởi động' },
+    { value: 'vcnv-q', label: 'VCNV (Câu hỏi)' },
+    { value: 'vcnv-a', label: 'VCNV (Đáp án)' },
+    { value: 'tangtoc-q', label: 'Tăng tốc (Câu hỏi)' },
+    { value: 'tangtoc-a', label: 'Tăng tốc (Đáp án)' },
+    { value: 'vd', label: 'Về đích' },
+    { value: 'chp', label: 'Câu hỏi phụ' },
+  ];
   protected role: LinkRole = 'viewer';
+  protected playerIndex = 0;
   protected view = '';
   protected label = '';
-  protected expiryHours: number | null = null;
+  protected expiryHours: number | string | null = null;
   protected singleUse = false;
   protected newLink = signal('');
   protected username = '';
@@ -120,15 +147,30 @@ export class RoomComponent {
     catch { this.snackBar.open('Không thể sao chép.', 'Đóng'); }
   }
   spectatorUrl(code: string): string { return `${window.location.origin}/r/${encodeURIComponent(code)}`; }
-  toggleSecret(role: keyof RoomSecrets): void { this.revealed.update((v) => ({ ...v, [role]: !v[role] })); }
-  async rotate(role: keyof RoomSecrets): Promise<void> {
+  toggleSecret(key: string): void { this.revealed.update((v) => ({ ...v, [key]: !v[key] })); }
+  async rotate(role: RotateSecretRole, playerIndex?: number): Promise<void> {
     if (!await this.confirm('Đổi mã bí mật', 'Các phiên dùng mã này sẽ bị thu hồi. Tiếp tục?', 'Đổi')) return;
-    try { await this.api.rotateSecret(role); await this.load(); } catch (error) { this.error(error); }
+    try { await this.api.rotateSecret(role, playerIndex); await this.load(); } catch (error) { this.error(error); }
   }
-  async release(index: number): Promise<void> {
-    if (!await this.confirm('Giải phóng chỗ', 'Phiên của thí sinh tại chỗ này sẽ bị thu hồi.', 'Giải phóng')) return;
-    try { await this.api.releaseSeat(index); await this.load(); } catch (error) { this.error(error); }
+  async rename(): Promise<void> {
+    const current = this.room();
+    if (!current) return;
+    const name = await firstValueFrom(
+      this.dialog.open<NameDialogComponent, NameDialogData, string>(NameDialogComponent, {
+        width: '24rem',
+        data: { title: 'Đổi tên phòng', label: 'Tên phòng', value: current.name },
+      }).afterClosed(),
+    );
+    if (!name || name === current.name) return;
+    try {
+      await this.api.roomSettings({ name });
+      await this.load();
+      this.snackBar.open('Đã đổi tên phòng.', 'Đóng', { duration: 2500 });
+    } catch (error) {
+      this.error(error);
+    }
   }
+
   async setListed(listed: boolean): Promise<void> {
     try { await this.api.roomSettings({ listed }); await this.load(); } catch (error) { this.error(error); await this.load(); }
   }
@@ -137,12 +179,26 @@ export class RoomComponent {
     try { await this.api.roomSettings({ spectatorMode }); await this.load(); } catch (error) { this.error(error); await this.load(); }
   }
   async createLink(): Promise<void> {
-    if (!this.label.trim() || (this.expiryHours !== null && (!Number.isFinite(this.expiryHours) || this.expiryHours <= 0))) {
-      this.snackBar.open('Nhập nhãn và thời hạn hợp lệ.', 'Đóng'); return;
+    const rawExpiry = this.expiryHours;
+    const hasExpiry = rawExpiry !== null && rawExpiry !== undefined && String(rawExpiry).trim() !== '';
+    const parsedExpiry = hasExpiry ? Number(rawExpiry) : undefined;
+    if (!this.label.trim()) {
+      this.snackBar.open('Vui lòng nhập nhãn cho liên kết.', 'Đóng', { duration: 3000 }); return;
+    }
+    if (hasExpiry && (!Number.isFinite(parsedExpiry) || parsedExpiry! <= 0)) {
+      this.snackBar.open('Thời hạn phải là số giờ lớn hơn 0.', 'Đóng', { duration: 3000 }); return;
     }
     try {
-      const result = await this.api.createRoomLink({ role: this.role, label: this.label.trim(), view: this.view.trim() || undefined, expiresInSeconds: this.expiryHours === null ? undefined : this.expiryHours * 3600, singleUse: this.singleUse });
+      const result = await this.api.createRoomLink({
+        role: this.role,
+        playerIndex: this.role === 'player' ? this.playerIndex : undefined,
+        label: this.label.trim(),
+        view: this.view || undefined,
+        expiresInSeconds: parsedExpiry === undefined ? undefined : parsedExpiry * 3600,
+        singleUse: this.singleUse,
+      });
       this.newLink.set(window.location.origin + result.path);
+      this.label = '';
       this.links.set(await this.api.roomLinks());
     } catch (error) { this.error(error); }
   }

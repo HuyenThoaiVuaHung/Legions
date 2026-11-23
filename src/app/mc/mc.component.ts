@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { CountdownComponent } from '../components/countdown/countdown.component';
 import { PlayerListComponent } from '../components/player-list/player-list.component';
+import { CnvViewerComponent } from '../editor/components/cnv-viewer/cnv-viewer.component';
 import { POSITION_LABELS } from '../core/constants';
 import { ChpQuestion, KdQuestion, RoundDataMap, TtQuestion, VcnvQuestion, VdQuestion } from '../core/contracts/game';
+import { VCNV_PIECE_COUNT, fetchObstaclePieceUrls } from '../core/vcnv-image.util';
 import { ApiService } from '../core/services/api.service';
 import { MediaService } from '../core/services/media.service';
 import { NetworkService } from '../core/services/network.service';
@@ -19,7 +21,7 @@ import { SessionService } from '../core/services/session.service';
   templateUrl: './mc.component.html',
   styleUrl: './mc.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PlayerListComponent, CountdownComponent, NgClass],
+  imports: [PlayerListComponent, CountdownComponent, CnvViewerComponent, NgClass],
 })
 export class McComponent {
   private readonly session = inject(SessionService);
@@ -60,9 +62,15 @@ export class McComponent {
   readonly chpRound = signal<RoundDataMap['chp'] | null>(null);
 
   readonly vcnvObstacle = computed(() => this.vcnvRound()?.obstacle ?? null);
-  readonly vcnvObstacleImage = computed(() =>
-    this.media.resolve('vcnv', this.vcnvObstacle()?.imageFile),
-  );
+  private readonly obstaclePieceUrls = signal<string[]>([]);
+  private lastPieceToken = '';
+  readonly vcnvObstaclePreviewSrcs = computed<readonly string[]>(() => {
+    const obstacle = this.vcnvObstacle();
+    if (!obstacle) return [];
+    const pieces = this.obstaclePieceUrls();
+    if (pieces.length === VCNV_PIECE_COUNT) return pieces;
+    return obstacle.imageFile ? [this.media.resolve('vcnv', obstacle.imageFile)] : [];
+  });
 
   /** Contestants who have buzzed in for the obstacle, in buzz-in order. */
   readonly obstaclePlayers = computed(() => {
@@ -90,6 +98,46 @@ export class McComponent {
     void this.api.getRound('tt').then((round) => this.ttRound.set(round));
     void this.api.getRound('vd').then((round) => this.vdRound.set(round));
     void this.api.getRound('chp').then((round) => this.chpRound.set(round));
+    this.network.emit('request-live-state');
+
+    effect(() => {
+      const snapshot = this.session.liveState();
+      if (!snapshot) return;
+      this.clockSeconds.set(snapshot.clock.remaining);
+      if (snapshot.clock.maxSeconds > 0) this.clockPeakSeconds.set(snapshot.clock.maxSeconds);
+      this.currentKdQuestion.set(snapshot.kd.question);
+      this.kdTurnPlayerIndex.set(snapshot.kd.turnPlayerIndex >= 0 ? snapshot.kd.turnPlayerIndex : null);
+      this.kdAnswerTimerTenths.set(snapshot.kd.decisionTimerOwner === 'player' ? snapshot.kd.decisionRemaining : 0);
+      this.kdTurnTimerTenths.set(snapshot.kd.decisionTimerOwner === 'admin' ? snapshot.kd.decisionRemaining : 0);
+      this.currentVcnvQuestion.set(snapshot.vcnv.question);
+      this.currentTtQuestion.set(snapshot.tt.question);
+      this.currentVdQuestion.set(snapshot.vd.question);
+      this.stealingPlayerIndex.set(snapshot.vd.stealingPlayerIndex >= 0 ? snapshot.vd.stealingPlayerIndex : null);
+      this.currentChpQuestion.set(snapshot.chp.question);
+    });
+
+    this.destroyRef.onDestroy(() => {
+      for (const url of this.obstaclePieceUrls()) URL.revokeObjectURL(url);
+    });
+
+    effect(() => {
+      const files = this.vcnvObstacle()?.imagePieceFiles;
+      const token = files?.length === VCNV_PIECE_COUNT ? files.join(',') : '';
+      if (token === this.lastPieceToken) return;
+      this.lastPieceToken = token;
+      for (const url of this.obstaclePieceUrls()) URL.revokeObjectURL(url);
+      this.obstaclePieceUrls.set([]);
+      if (!token) return;
+      void fetchObstaclePieceUrls(this.api)
+        .then((urls) => {
+          if (this.lastPieceToken !== token) {
+            for (const url of urls) URL.revokeObjectURL(url);
+            return;
+          }
+          this.obstaclePieceUrls.set(urls);
+        })
+        .catch(() => {});
+    });
 
     const unsubs = [
       this.network.on<[KdQuestion | null]>('update-kd-question', (question) =>

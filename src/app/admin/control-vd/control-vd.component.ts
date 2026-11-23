@@ -15,8 +15,10 @@ import { CellEdit, EditableTableComponent, TableCellDirective, TableColumn } fro
 import { MatTooltip } from '@angular/material/tooltip';
 import { FormQVdComponent } from '../../components/forms/form-q-vd/form-q-vd.component';
 import { MenuItemComponent } from '../../components/menu-item/menu-item.component';
+import { VideoControlBarComponent } from '../../components/video-control-bar/video-control-bar.component';
 import { Player, VdQuestion, VdRound } from '../../core/contracts/game';
 import { ApiService } from '../../core/services/api.service';
+import { MediaService } from '../../core/services/media.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 import { queryParamState } from '../../core/query-param';
@@ -51,10 +53,12 @@ import { ResizeGroupDirective } from '../../components/resizable/resize-group.di
     TableCellDirective,
     MatTooltip,
     MenuItemComponent,
+    VideoControlBarComponent,
   ],
 })
 export class ControlVdComponent {
   private readonly api = inject(ApiService);
+  private readonly media = inject(MediaService);
   private readonly network = inject(NetworkService);
   private readonly dialog = inject(MatDialog);
   protected readonly session = inject(SessionService);
@@ -77,6 +81,10 @@ export class ControlVdComponent {
   protected readonly round = signal<VdRound | null>(null);
   protected readonly currentTime = signal(0);
   protected readonly displayingRow = signal<VdQuestion | null>(null);
+  protected readonly displayingVideoUrl = computed(() => {
+    const row = this.displayingRow();
+    return row?.type === 'V' && row.mediaFile ? this.media.resolve('vd', row.mediaFile) : null;
+  });
   /** 0-based index of the player who buzzed to steal; null when nobody did. */
   protected readonly stealingPlayerIndex = signal<number | null>(null);
 
@@ -113,6 +121,7 @@ export class ControlVdComponent {
     ]) {
       destroyRef.onDestroy(off);
     }
+    this.network.emit('request-live-state');
     void this.init();
   }
 
@@ -217,7 +226,7 @@ export class ControlVdComponent {
       if (!result) return;
       result.value = Number(result.value) || 0;
       const updated = structuredClone(round);
-      updated.questionPools[updated.activePlayerIndex].push(result);
+      (updated.questionPools[updated.activePlayerIndex] ??= []).push(result);
       await this.saveRound(updated);
     });
   }

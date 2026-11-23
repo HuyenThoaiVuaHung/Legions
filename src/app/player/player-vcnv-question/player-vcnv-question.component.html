@@ -24,15 +24,17 @@
            The server refuses any piece whose row is still closed. -->
       @for (piece of obstaclePieces(); track piece.index) {
         @if (piece.open) {
-          <img
-            draggable="false"
-            (dragstart)="(false)"
-            class="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            [src]="piece.url"
-            alt=""
-          />
+          @if (piece.url) {
+            <img
+              draggable="false"
+              (dragstart)="(false)"
+              class="absolute inset-0 w-full h-full object-cover pointer-events-none {{ piece.z }}"
+              [src]="piece.url"
+              alt=""
+            />
+          }
         } @else {
-          <div class="cover-cell absolute grid place-items-center {{ piece.cover }}">
+          <div class="cover-cell absolute flex {{ piece.cover }}">
             {{ piece.label }}
           </div>
         }

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
-import { MatButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import {
   MatCard,
   MatCardActions,
@@ -12,9 +12,11 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
+import { MatTooltip } from '@angular/material/tooltip';
 import { CellEdit, EditableTableComponent, TableCellDirective, TableColumn } from '../../components/editable-table/editable-table.component';
 import { FormQTtComponent } from '../../components/forms/form-q-tt/form-q-tt.component';
 import { MenuItemComponent } from '../../components/menu-item/menu-item.component';
+import { VideoControlBarComponent } from '../../components/video-control-bar/video-control-bar.component';
 import { POSITION_LABELS } from '../../core/constants';
 import { Player, TtQuestion, TtRound } from '../../core/contracts/game';
 import { queryParamState } from '../../core/query-param';
@@ -37,6 +39,8 @@ import { ResizeGroupDirective } from '../../components/resizable/resize-group.di
   imports: [
     ResizeGroupDirective,
     MatButton,
+    MatIconButton,
+    MatTooltip,
     MatCard,
     MatCardActions,
     MatCardContent,
@@ -49,6 +53,7 @@ import { ResizeGroupDirective } from '../../components/resizable/resize-group.di
     EditableTableComponent,
     TableCellDirective,
     MenuItemComponent,
+    VideoControlBarComponent,
   ],
 })
 export class ControlTangtocComponent {
@@ -79,6 +84,10 @@ export class ControlTangtocComponent {
   protected readonly currentTime = signal(0);
   protected readonly chosenRow = signal<TtQuestion | null>(null);
   protected readonly displayingRow = signal<TtQuestion | null>(null);
+  protected readonly displayingVideoUrl = computed(() => {
+    const row = this.displayingRow();
+    return row?.type === 'video' && row.videoFile ? this.media.resolve('tt', row.videoFile) : null;
+  });
   /** Replaces the old global config flag: re-show the answer when returning to the question view. */
   protected readonly autoShowAnswer = signal(false);
 
@@ -113,6 +122,7 @@ export class ControlTangtocComponent {
       const row = round.questions[Number(raw)];
       if (row) this.chosenRow.set(row);
     });
+    this.network.emit('request-live-state');
     void this.init();
   }
 
@@ -150,6 +160,39 @@ export class ControlTangtocComponent {
 
   async savePlayerCell(edit: CellEdit<Player>): Promise<void> {
     this.session.match.set(await this.api.updatePlayer(edit.index, { ...edit.row, [edit.key]: edit.value }));
+  }
+
+  protected readonly timerPresets = computed(() => [...new Set(this.config.rules().ttQuestionSeconds)]);
+  protected readonly maxQuestions = 6;
+
+  addQuestion(): void {
+    const round = this.round();
+    if (!round || round.questions.length >= this.maxQuestions) return;
+    const nextId = round.questions.reduce((max, q) => Math.max(max, q.id), 0) + 1;
+    const blank: TtQuestion = { id: nextId, question: '', answer: '', type: 'image' };
+    const dialogRef = this.dialog.open<FormQTtComponent, TtQuestion, TtQuestion>(
+      FormQTtComponent,
+      { data: blank },
+    );
+    dialogRef.afterClosed().subscribe(async (result) => {
+      if (!result) return;
+      const updated = structuredClone(round);
+      updated.questions.push(result);
+      this.round.set(await this.api.putRound('tt', updated));
+    });
+  }
+
+  async deleteQuestion(): Promise<void> {
+    const round = this.round();
+    const chosen = this.chosenRow();
+    if (!round || !chosen) return;
+    const index = round.questions.findIndex((q) => q.id === chosen.id);
+    if (index < 0) return;
+    const updated = structuredClone(round);
+    updated.questions.splice(index, 1);
+    if (this.displayingRow()?.id === chosen.id) this.displayingRow.set(null);
+    this.select(null);
+    this.round.set(await this.api.putRound('tt', updated));
   }
 
   editQuestion(): void {
@@ -230,14 +273,13 @@ export class ControlTangtocComponent {
     this.network.emit('start-clock', seconds);
   }
 
-  /** Countdown length for an image question, per Olympia pacing. */
-  imageTimerSeconds(question: TtQuestion): number {
-    return question.id > 2 ? 30 : 20;
-  }
-
-  togglePlayVideo(): void {
-    this.network.emit('tangtoc-play-video');
-    this.startTimer(this.config.rules().ttVideoSeconds);
+  togglePlayVideo(startTimer = false): void {
+    if (startTimer) {
+      this.network.emit('video-control', { target: 'tt', action: 'play' });
+      this.startTimer(this.config.rules().ttVideoSeconds);
+    } else {
+      this.network.emit('video-control', { target: 'tt', action: 'toggle' });
+    }
   }
 
   toggleResultsDisplay(): void {

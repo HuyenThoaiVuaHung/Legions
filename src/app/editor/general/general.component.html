@@ -1,9 +1,13 @@
-<h3 class="mb-6">
-  <strong> Cài đặt chung </strong>
-</h3>
+@if (!editorDataService.hosted) {
+<h2 class="mat-title-large !m-0 mb-5">Cài đặt chung</h2>
+}
 @if (this.editorDataService.editorData) {
-<mat-accordion multi class="">
-  <mat-expansion-panel>
+@let hosted = editorDataService.hosted;
+@if (hosted?.held('settings'); as holder) {
+  <p role="status">{{ holder }} đang chỉnh sửa cài đặt.</p>
+}
+<mat-accordion multi hostedSettings [class.hosted-settings]="!!hosted">
+  <mat-expansion-panel [expanded]="!!hosted">
     <mat-expansion-panel-header class="h-max">
       <span class="w-max grid place-items-center pr-6">
         <mat-icon>groups</mat-icon>
@@ -15,31 +19,13 @@
     </mat-expansion-panel-header>
     <player-table
       (playersChangeEvent)="this.save()"
+      [editable]="!hosted || (hosted.canEdit() && !hosted.held('settings'))"
       [players]="this.editorDataService.editorData.matchData.players"
     >
     </player-table>
-    <div class="mt-5">
-      <editor-item
-        title="Hình ảnh thí sinh"
-        description="Sẽ xuất hiện ở phần tổng kết điểm các thí sinh."
-      />
-      <div class="w-full my-5 grid grid-flow-col">
-        @for (player of this.editorDataService.editorData.matchData.players;
-        track $index) {
-        <image-input
-          class="border"
-          [src]="
-            editorDataService.editorData.uiConfig.miscImageSrc?.players? editorDataService.editorData.uiConfig.miscImageSrc?.players![$index] || '../../assets/misc/logo.png' : '../../assets/misc/logo.png'
-          "
-          (imageChangeEvent)="handleImageChange($event, 'players', $index)"
-          [title]="player.name"
-        >
-        </image-input>
-        }
-      </div>
-    </div>
+    @if (!hosted) { <ng-container [ngTemplateOutlet]="contestantImages" /> }
   </mat-expansion-panel>
-  <mat-expansion-panel>
+  <mat-expansion-panel [expanded]="!!hosted">
     <mat-expansion-panel-header>
       <span class="w-max grid place-items-center pr-6">
         <mat-icon>crossword</mat-icon>
@@ -56,12 +42,13 @@
       >
         <mat-form-field
           appearance="outline"
-          class="w-[30rem]"
+          class="w-full max-w-[30rem]"
           subscriptSizing="dynamic"
         >
           <input
-            (ngModelChange)="save()"
             [(ngModel)]="editorDataService.editorData.matchData.matchName"
+            (ngModelChange)="save()"
+            [readonly]="!!hosted && (!hosted.canEdit() || hosted.active() !== 'settings')"
             matInput
             placeholder="Tên trận đấu"
           />
@@ -71,15 +58,16 @@
       <mat-divider></mat-divider>
       <editor-item
         title="Thể thức"
-        description="Chọn giữa thể thức thi đấu của Olympia 2023 và 2024."
+        description="Chọn thể thức thi đấu (O23, O24, O25, O26)."
       >
         <mat-form-field
           appearance="outline"
-          class="w-[30rem]"
+          class="w-full max-w-[30rem]"
           subscriptSizing="dynamic"
         >
           <mat-select
             matInput
+            [disabled]="!!hosted && !hosted.canEdit()"
             (opened)="
               this.matchVersionSnapshot =
                 this.editorDataService.editorData.matchData.matchVersion
@@ -95,6 +83,8 @@
           >
             <mat-option [value]="23">O23</mat-option>
             <mat-option [value]="24">O24</mat-option>
+            <mat-option [value]="25">O25</mat-option>
+            <mat-option [value]="26">O26</mat-option>
           </mat-select>
           <mat-label>Thể thức thi đấu</mat-label>
         </mat-form-field>
@@ -118,7 +108,7 @@
       >
         <mat-form-field
           appearance="outline"
-          class="w-[30rem]"
+          class="w-full max-w-[30rem]"
           subscriptSizing="dynamic"
         >
           <mat-select
@@ -153,7 +143,7 @@
         </div>
       </editor-item>
     </div>
-    <div class="mt-10 flex gap-6">
+    <div class="mt-4 flex gap-4">
       <image-input
         title="Logo"
         description="Sẽ xuất hiện như Watermark ở trong các câu hỏi."
@@ -176,7 +166,7 @@
         (imageChangeEvent)="handleImageChange($event, 'logo-long')"
       />
     </div>
-    <div class="mt-10 flex gap-6">
+    <div class="mt-4 flex gap-4">
       <image-input
         title="Placeholder"
         description="Sẽ xuất hiện để che hình ảnh và video trước khi hiện trong phần thi Tăng Tốc và Về Đích."
@@ -200,8 +190,31 @@
         (imageChangeEvent)="handleImageChange($event, 'background')"
       />
     </div>
+    @if (hosted) { <ng-container [ngTemplateOutlet]="contestantImages" /> }
   </mat-expansion-panel>
 </mat-accordion>
+<ng-template #contestantImages>
+    <div class="mt-3">
+      <editor-item
+        title="Hình ảnh thí sinh"
+        description="Sẽ xuất hiện ở phần tổng kết điểm các thí sinh."
+      />
+      <div class="w-full my-3 grid grid-flow-col gap-3">
+        @for (player of this.editorDataService.editorData.matchData.players;
+        track $index) {
+        <image-input
+          class="border"
+          [src]="
+            editorDataService.editorData.uiConfig.miscImageSrc?.players? editorDataService.editorData.uiConfig.miscImageSrc?.players![$index] || '../../assets/misc/logo.png' : '../../assets/misc/logo.png'
+          "
+          (imageChangeEvent)="handleImageChange($event, 'players', $index)"
+          [title]="player.name"
+        >
+        </image-input>
+        }
+      </div>
+    </div>
+</ng-template>
 }
 
 <div class="w-full h-0.5 flex"></div>

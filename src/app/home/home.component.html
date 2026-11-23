@@ -52,7 +52,7 @@
           <h6 class="font-semibold">Xin chào, {{ greeting() }}!</h6>
         }
       </div>
-      @if (defaultUrl() && !session.multiRoom()) {
+      @if (defaultUrl()) {
         <div class="mt-4 flex flex-col gap-2 w-96">
           <div class="flex gap-2">
             <button mat-flat-button (click)="joinAsViewer()">
@@ -109,18 +109,6 @@
           </div>
         </mat-step>
         <mat-step label="Đăng nhập" state="login" [completed]="!!session.identity()">
-          @if (session.multiRoom()) {
-            <h3>Vào phòng</h3>
-            <form [formGroup]="joinForm" class="flex flex-col">
-              <mat-form-field><mat-label>Mã phòng</mat-label><input matInput formControlName="code" /></mat-form-field>
-              <mat-form-field><mat-label>Mật mã (không bắt buộc)</mat-label><input matInput formControlName="secret" /></mat-form-field>
-              @if (usernameNeeded()) {
-                <mat-form-field><mat-label>Tên người chơi</mat-label><input matInput formControlName="username" maxlength="32" /></mat-form-field>
-              }
-            </form>
-            @if (joinMessage()) { <p role="alert">{{ joinMessage() }}</p> }
-            <button mat-flat-button (click)="joinRoom()">Vào phòng</button>
-          } @else {
           <form [formGroup]="secretForm">
             <mat-form-field class="mt-5 w-96">
               <input
@@ -139,7 +127,6 @@
               Đăng nhập
             </button>
           </div>
-          }
         </mat-step>
 
         <ng-template matStepperIcon="connect">

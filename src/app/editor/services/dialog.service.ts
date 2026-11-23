@@ -44,7 +44,9 @@ export class DialogService {
         aspectRatioX: aspectRatioX,
         aspectRatioY: aspectRatioY
       },
-      width: 'auto',
+      width: 'min(760px, 92vw)',
+      maxWidth: '92vw',
+      maxHeight: '90vh',
     });
     return lastValueFrom<File | undefined>(dialogRef.afterClosed());
   }

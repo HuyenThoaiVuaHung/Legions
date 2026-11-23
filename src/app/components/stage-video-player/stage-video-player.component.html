@@ -1,0 +1,33 @@
+<div
+  class="video-stage"
+  [class.video-stage--fullscreen]="isRemoteFullscreen()"
+>
+  <video
+    #video
+    class="video-el"
+    [src]="src()"
+    [attr.poster]="poster()"
+    preload="auto"
+    playsinline
+    (loadedmetadata)="onLoadedMetadata()"
+    (play)="onPlay()"
+    (pause)="onPause()"
+    (waiting)="onWaiting()"
+    (canplay)="onCanPlay()"
+    (ended)="onEnded()"
+    (error)="onError()"
+  ></video>
+
+  @if (buffering()) {
+    <div class="stage-overlay">
+      <mat-progress-spinner mode="indeterminate" diameter="44"></mat-progress-spinner>
+    </div>
+  }
+
+  @if (hasError()) {
+    <div class="stage-overlay stage-error">
+      <mat-icon>videocam_off</mat-icon>
+      <span>Không thể tải video</span>
+    </div>
+  }
+</div>

@@ -8,6 +8,10 @@
       </mat-expansion-panel-header>
         <div class="flex flex-col gap-1 pt-2">
         <div class="row">
+          <span class="opacity-70 w-40">Tên phòng</span><strong class="flex-1 truncate">{{ info.name }}</strong>
+          <button mat-icon-button matTooltip="Đổi tên phòng" (click)="rename()"><mat-icon>edit</mat-icon></button>
+        </div>
+        <div class="row">
           <span class="opacity-70 w-40">Mã phòng</span><strong class="flex-1">{{ info.code }}</strong>
           <button mat-icon-button matTooltip="Sao chép mã" (click)="copy(info.code)"><mat-icon>content_copy</mat-icon></button>
         </div>
@@ -29,13 +33,22 @@
       </mat-expansion-panel-header>
         <div class="flex flex-col gap-1 pt-2">
         @if (info.secrets; as secrets) {
-          @for (role of roles; track role.key) {
+          @for (role of staffRoles; track role.key) {
             <div class="row">
               <strong class="w-40">{{ role.label }}</strong>
               <span class="flex-1 font-mono">{{ revealed()[role.key] ? secrets[role.key] : '••••••••' }}</span>
               <button mat-icon-button [matTooltip]="revealed()[role.key] ? 'Ẩn' : 'Hiện'" (click)="toggleSecret(role.key)"><mat-icon>{{ revealed()[role.key] ? 'visibility_off' : 'visibility' }}</mat-icon></button>
               <button mat-icon-button matTooltip="Sao chép" (click)="copy(secrets[role.key])"><mat-icon>content_copy</mat-icon></button>
               <button mat-icon-button matTooltip="Đổi mã" (click)="rotate(role.key)"><mat-icon>autorenew</mat-icon></button>
+            </div>
+          }
+          @for (code of secrets.players; track $index) {
+            <div class="row">
+              <strong class="w-40 truncate" [title]="playerLabel($index)">{{ playerLabel($index) }}</strong>
+              <span class="flex-1 font-mono">{{ revealed()['player-' + $index] ? code : '••••••••' }}</span>
+              <button mat-icon-button [matTooltip]="revealed()['player-' + $index] ? 'Ẩn' : 'Hiện'" (click)="toggleSecret('player-' + $index)"><mat-icon>{{ revealed()['player-' + $index] ? 'visibility_off' : 'visibility' }}</mat-icon></button>
+              <button mat-icon-button matTooltip="Sao chép" (click)="copy(code)"><mat-icon>content_copy</mat-icon></button>
+              <button mat-icon-button matTooltip="Đổi mã" (click)="rotate('player', $index)"><mat-icon>autorenew</mat-icon></button>
             </div>
           }
         }
@@ -45,7 +58,7 @@
       <mat-expansion-panel [expanded]="isOpen('access')" (expandedChange)="toggle('access', $event)">
         <mat-expansion-panel-header class="h-max !py-3">
         <span class="w-max grid place-items-center pr-6"><mat-icon>groups</mat-icon></span>
-        <span class="flex flex-col"><span class="mat-title-medium">Truy cập và chỗ thí sinh</span><small class="opacity-70">Hiển thị phòng, chế độ khán giả và các chỗ thí sinh.</small></span>
+        <span class="flex flex-col"><span class="mat-title-medium">Quyền truy cập khán giả</span><small class="opacity-70">Chọn cách khán giả có thể vào phòng.</small></span>
       </mat-expansion-panel-header>
         <div class="flex flex-col gap-4 pt-3">
         <mat-form-field class="w-80" appearance="outline" subscriptSizing="dynamic">
@@ -54,15 +67,6 @@
             <mat-option value="open">Mở</mat-option><mat-option value="secret">Mã bí mật</mat-option><mat-option value="off">Tắt</mat-option>
           </mat-select>
         </mat-form-field>
-        <div class="seat-grid">
-          @for (seat of info.seats; track $index) {
-            <div class="seat">
-              <span class="opacity-70">Chỗ {{ $index + 1 }}</span>
-              <strong class="flex-1 truncate" [class.opacity-50]="!seat">{{ seat || 'Trống' }}</strong>
-              @if (seat) { <button mat-button (click)="release($index)">Giải phóng</button> }
-            </div>
-          }
-        </div>
       </div>
       </mat-expansion-panel>
 
@@ -74,11 +78,29 @@
         <div class="flex flex-col gap-1 pt-2">
         <div class="form-row">
           <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Vai trò</mat-label><mat-select [(ngModel)]="role"><mat-option value="viewer">Khán giả</mat-option><mat-option value="mc">MC</mat-option><mat-option value="player">Thí sinh</mat-option></mat-select></mat-form-field>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Màn hình (tùy chọn)</mat-label><input matInput [(ngModel)]="view" maxlength="32" /></mat-form-field>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Nhãn</mat-label><input matInput [(ngModel)]="label" maxlength="60" /></mat-form-field>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Thời hạn (giờ, tùy chọn)</mat-label><input matInput type="number" min="0" [(ngModel)]="expiryHours" /></mat-form-field>
+          @if (role === 'player') {
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Thí sinh</mat-label>
+              <mat-select [(ngModel)]="playerIndex">
+                @for (seat of [0, 1, 2, 3]; track seat) {
+                  <mat-option [value]="seat">{{ playerLabel(seat) }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Màn hình (tùy chọn)</mat-label>
+            <mat-select [(ngModel)]="view">
+              <mat-option value="">Mặc định theo vai trò</mat-option>
+              @for (option of viewOptions; track option.value) {
+                <mat-option [value]="option.value">{{ option.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Nhãn</mat-label><input matInput [(ngModel)]="label" maxlength="60" required /></mat-form-field>
+          <mat-form-field appearance="outline" subscriptSizing="dynamic"><mat-label>Thời hạn (giờ, tùy chọn)</mat-label><input matInput type="number" min="0.1" step="any" [(ngModel)]="expiryHours" /></mat-form-field>
           <mat-slide-toggle [(ngModel)]="singleUse">Dùng một lần</mat-slide-toggle>
-          <button mat-stroked-button (click)="createLink()"><mat-icon>add_link</mat-icon>Tạo liên kết</button>
+          <button mat-stroked-button [disabled]="!label.trim()" (click)="createLink()"><mat-icon>add_link</mat-icon>Tạo liên kết</button>
         </div>
         @if (newLink()) {
           <div class="row"><span class="opacity-70 w-40">Hiển thị một lần</span><span class="flex-1 min-w-0 break-all">{{ newLink() }}</span>
@@ -88,7 +110,7 @@
           <div class="row">
             <div class="flex-1 min-w-0 flex flex-col">
               <strong>{{ link.label }}</strong>
-              <small class="opacity-70">{{ link.role }} {{ link.view || '' }}</small>
+              <small class="opacity-70">{{ linkSummary(link) }}</small>
               @if (link.singleUse) { <small class="opacity-70">Dùng một lần</small> }
               @if (link.usedAt) { <small class="opacity-70">Đã dùng</small> }
               @if (link.expiresAt) { <small class="opacity-70">Hết hạn {{ link.expiresAt | date:'short' }}</small> }

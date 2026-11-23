@@ -1,0 +1,27 @@
+<div class="waiting-shell disablePointerActions relative overflow-hidden w-screen h-screen flex items-center justify-center p-8 box-border">
+  @if (backgroundUrl(); as bg) {
+    <img [src]="bg" alt="" class="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />
+  }
+  <div class="waiting-card relative z-10 flex flex-col items-center text-center gap-6 max-w-2xl w-full">
+    <img
+      [src]="assets.brand('logo-long')"
+      alt="Legion"
+      class="max-w-md w-full max-h-36 object-contain"
+    />
+
+    @if (matchName(); as name) {
+      <h2 class="text-3xl md:text-4xl font-bold tracking-tight m-0">{{ name }}</h2>
+    }
+
+    <p class="text-xl font-semibold opacity-90 m-0">Xin chào, {{ greeting() }}!</p>
+
+    <div class="waiting-pill inline-flex items-center gap-3 px-5 py-2.5 rounded-full">
+      <span class="waiting-dot"></span>
+      <span class="text-base font-medium">Trận đấu chưa bắt đầu. Đang chờ ban tổ chức...</span>
+    </div>
+
+    @if (session.roomCode(); as code) {
+      <span class="text-sm opacity-60 tracking-wider uppercase">Phòng {{ code }}</span>
+    }
+  </div>
+</div>

@@ -2,19 +2,19 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButton } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
-import { MatInput } from '@angular/material/input';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 
-export interface NameDialogData { title: string; label: string; value: string }
+export interface NameDialogData { title: string; label: string; value?: string }
 
 @Component({
   selector: 'app-name-dialog',
   changeDetection: ChangeDetectionStrategy.Eager,
-  imports: [FormsModule, MatButton, MatDialogModule, MatFormField, MatLabel, MatInput],
+  imports: [FormsModule, MatButton, MatDialogModule, MatFormFieldModule, MatInputModule],
   template: `
     <h2 mat-dialog-title>{{ data.title }}</h2>
     <mat-dialog-content>
-      <mat-form-field appearance="outline" class="w-full pt-2">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w-full pt-2">
         <mat-label>{{ data.label }}</mat-label>
         <input matInput [(ngModel)]="value" (keydown.enter)="ok()" autocomplete="off" />
       </mat-form-field>
@@ -28,6 +28,6 @@ export interface NameDialogData { title: string; label: string; value: string }
 export class NameDialogComponent {
   protected readonly data = inject<NameDialogData>(MAT_DIALOG_DATA);
   private readonly ref = inject<MatDialogRef<NameDialogComponent, string>>(MatDialogRef);
-  protected value = this.data.value;
+  protected value = this.data.value ?? '';
   ok(): void { if (this.value.trim()) this.ref.close(this.value.trim()); }
 }

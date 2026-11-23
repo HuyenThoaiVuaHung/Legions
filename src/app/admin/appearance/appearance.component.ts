@@ -188,10 +188,12 @@ export class AppearanceComponent {
   }
 
   async onBrandAssetSelected(key: BrandAssetKey, event: Event): Promise<void> {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
     if (file.type !== 'image/png') {
       this.snackBar.open('Ảnh phải là PNG.', 'Đóng');
+      input.value = '';
       return;
     }
 
@@ -204,6 +206,7 @@ export class AppearanceComponent {
       this.snackBar.open('Không thể tải tài sản thương hiệu lên máy chủ.', 'Đóng');
     } finally {
       this.uploadingBrandAsset.set(null);
+      input.value = '';
     }
   }
 

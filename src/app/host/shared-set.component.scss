@@ -1,0 +1,45 @@
+:host { display: block; }
+
+.editor-ribbon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.editor-menubar {
+  --mat-toolbar-standard-height: 36px;
+  --mat-toolbar-mobile-height: 36px;
+  --mat-toolbar-container-background-color: transparent;
+  --mat-button-text-container-height: 28px;
+  --mat-button-text-horizontal-padding: 10px;
+  width: auto;
+  flex: none;
+  padding-inline: 0;
+  gap: .125rem;
+}
+
+.editor-tabs {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.round-content { display: block; padding-block: .75rem 1.25rem; min-width: 0; overflow-x: auto; }
+
+.editor-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .6rem;
+  margin-top: .75rem;
+  color: var(--mat-sys-error);
+}
+
+@media (max-width: 639px) {
+  .editor-ribbon { flex-direction: column; align-items: stretch; gap: 0; }
+  .ribbon-button { min-width: 2.75rem; padding-inline: .5rem; }
+  .ribbon-button span { display: none; }
+  .ribbon-button mat-icon { margin-inline: 0; }
+}

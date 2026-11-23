@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
@@ -8,16 +9,22 @@ import { STORAGE_KEYS } from '../core/constants';
 import { AccountProfile, BankItem, OwnedRoom, Role } from '../core/contracts/api';
 import { ApiService } from '../core/services/api.service';
 import { SessionService } from '../core/services/session.service';
+import { BankApiService } from './bank-api.service';
+import { QuestionSetItem } from '../core/contracts/bank';
 import { CreateRoomDialogComponent } from './create-room-dialog.component';
+import { exportEditorDataToExcel, parseExcelToEditorData, saveBlob } from '../editor/services/excel-editor.util';
 
-export interface BankState { items: BankItem[]; usedBytes: number; maxBytes: number; maxItems: number }
+export interface BankState { items: QuestionSetItem[]; usedBytes: number; maxBytes: number; maxItems: number }
 
 @Injectable({ providedIn: 'root' })
 export class HostStore {
   private readonly api = inject(ApiService);
   private readonly session = inject(SessionService);
   private readonly router = inject(Router);
+  private readonly location = inject(Location);
   private readonly dialog = inject(MatDialog);
+
+  private readonly bankApi = inject(BankApiService);
 
   readonly profile = signal<AccountProfile | null>(null);
   readonly bank = signal<BankState | null>(null);
@@ -25,6 +32,7 @@ export class HostStore {
   readonly busy = signal(false);
 
   async refresh(): Promise<void> {
+    this.error.set('');
     try {
       const [profile, bank] = await Promise.all([this.api.me(), this.api.bank()]);
       this.profile.set(profile);
@@ -53,8 +61,33 @@ export class HostStore {
     this.busy.set(true);
     this.error.set('');
     try { await action(); }
-    catch (error) { this.error.set(error instanceof HttpErrorResponse && error.status === 413 ? 'Tệp quá lớn hoặc ngân hàng đã đầy.' : 'Thao tác không thành công. Vui lòng thử lại.'); }
+    catch (error) { this.error.set(error instanceof HttpErrorResponse && typeof error.error?.error === 'string' ? error.error.error : 'Thao tác không thành công. Vui lòng thử lại.'); }
     finally { this.busy.set(false); }
+  }
+
+  newSet(options?: { openInNewTab?: boolean }): void {
+    const tab = options?.openInNewTab ? window.open('about:blank', '_blank') : null;
+    void this.perform(async () => {
+      try {
+        const item = await this.bankApi.create();
+        await this.refresh();
+        if (options?.openInNewTab) {
+          const url = this.location.prepareExternalUrl(this.router.serializeUrl(this.router.createUrlTree(['/host/bank', item.id])));
+          if (tab && !tab.closed) {
+            tab.opener = null;
+            tab.location.href = url;
+          } else {
+            const opened = window.open(url, '_blank', 'noopener');
+            if (!opened) await this.router.navigate(['/host/bank', item.id]);
+          }
+        } else {
+          await this.router.navigate(['/host/bank', item.id]);
+        }
+      } catch (error) {
+        tab?.close();
+        throw error;
+      }
+    });
   }
 
   newRoom(): void {
@@ -64,13 +97,20 @@ export class HostStore {
       .afterClosed().subscribe((source) => { if (source !== undefined) void this.create(source || undefined); });
   }
   create(bankItemId?: string): Promise<void> {
-    return this.perform(async () => { await this.api.createRoom(bankItemId); await this.refresh(); });
+    return this.perform(async () => { const room = await this.api.createRoom(bankItemId);
+      await this.session.acceptRoomSession(room, room.code);
+      await this.refresh();
+      await this.router.navigateByUrl(this.session.homeFor(Role.Admin)); });
   }
   enter(room: OwnedRoom): Promise<void> {
     return this.perform(async () => {
       await this.session.acceptRoomSession(await this.api.enterRoom(room.roomId), room.code);
       await this.router.navigateByUrl(this.session.homeFor(Role.Admin));
     });
+  }
+  renameRoom(room: OwnedRoom): void {
+    this.dialog.open<NameDialogComponent, NameDialogData, string>(NameDialogComponent, { width: '24rem', data: { title: 'Đổi tên phòng', label: 'Tên phòng', value: room.name } })
+      .afterClosed().subscribe((name) => { if (name) void this.perform(async () => { await this.api.renameRoom(room.roomId, name); await this.refresh(); }); });
   }
 
   async upload(event: Event): Promise<void> {
@@ -80,14 +120,36 @@ export class HostStore {
     await this.perform(async () => { await this.api.uploadBank(file); await this.refresh(); });
     input.value = '';
   }
-  download(item: BankItem): Promise<void> {
+  async importLegionFile(file: File): Promise<void> {
+    await this.perform(async () => {
+      const item = await this.bankApi.importLegion(file);
+      await this.refresh();
+      await this.router.navigate(['/host/bank', item.id]);
+    });
+  }
+  async importExcelFile(file: File): Promise<void> {
+    await this.perform(async () => {
+      const data = await parseExcelToEditorData(file);
+      const item = await this.bankApi.importData(data);
+      await this.refresh();
+      await this.router.navigate(['/host/bank', item.id]);
+    });
+  }
+  exportLegion(item: { id: string; name: string }): Promise<void> {
     return this.perform(async () => {
-      const url = URL.createObjectURL(await this.api.downloadBank(item.id));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${item.name}.legion`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const blob = await this.bankApi.exportLegion(item.id);
+      saveBlob(blob, `${item.name || 'question-set'}.legion`);
+    });
+  }
+  exportExcel(item: { id: string; name: string }): Promise<void> {
+    return this.perform(async () => {
+      const data = await this.bankApi.exportJson(item.id);
+      saveBlob(exportEditorDataToExcel(data), `${item.name || 'question-set'}.xlsx`);
+    });
+  }
+  download(item: { id: string; name: string }): Promise<void> {
+    return this.perform(async () => {
+      saveBlob(await this.api.downloadBank(item.id), `${item.name || 'question-set'}.json`);
     });
   }
   rename(item: BankItem): void {

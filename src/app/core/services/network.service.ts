@@ -2,6 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
 import { STORAGE_KEYS } from '../constants';
 import { PublicRoom } from '../contracts/api';
+import { BankPresence } from '../contracts/bank';
 
 export enum ConnectionStatus {
   Disconnected = 'disconnected',
@@ -62,11 +63,29 @@ export class NetworkService {
     return () => { lobby.removeAllListeners(); lobby.disconnect(); };
   }
 
-  disconnect(): void {
+  /** Authoring has its own account-authenticated connection, independent of live rooms. */
+  watchBank(setId: string, tabId: string, changed: () => void, presence: (peers: BankPresence[]) => void, status: (state: 'connected' | 'disconnected' | 'revoked') => void): () => void {
+    const socket = io(`${this.apiBase() || window.location.origin}/bank`, {
+      auth: { token: localStorage.getItem(STORAGE_KEYS.accountToken), setId, tabId },
+    });
+    socket.on('changed', changed);
+    socket.on('presence', presence);
+    socket.on('connect', () => status('connected'));
+    socket.on('disconnect', () => status('disconnected'));
+    socket.on('connect_error', () => status('disconnected'));
+    socket.on('access-revoked', () => { status('revoked'); socket.disconnect(); });
+    return () => { socket.removeAllListeners(); socket.disconnect(); };
+  }
+
+  closeRoomSocket(): void {
     this.socketRef?.removeAllListeners();
     this.socketRef?.disconnect();
     this.socketRef = null;
     this.status.set(ConnectionStatus.Disconnected);
+  }
+
+  disconnect(): void {
+    this.closeRoomSocket();
     localStorage.removeItem(STORAGE_KEYS.serverUrl);
   }
 

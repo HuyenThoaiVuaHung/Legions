@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, DestroyRef, Inject, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle } from '@angular/material/dialog';
 import { IQuestion, QuestionType } from '../../editor.interfaces';
@@ -32,6 +32,7 @@ import { MatIconModule } from '@angular/material/icon';
   styleUrl: './question-dialog.component.scss'
 })
 export class QuestionDialog {
+  private readonly destroyRef = inject(DestroyRef);
   constructor(@Inject(MAT_DIALOG_DATA) public data: {
     question: IQuestion,
     valueList?: number[]
@@ -39,6 +40,9 @@ export class QuestionDialog {
     if (data.valueList) {
       this.questionForm.controls.value.setValue(data.valueList[0])
     }
+    this.destroyRef.onDestroy(() => {
+      if (this.mediaBlobUrl) URL.revokeObjectURL(this.mediaBlobUrl);
+    });
    }
   public media: File | undefined = undefined;
   public mediaBlobUrl: string | undefined = undefined;
@@ -59,6 +63,7 @@ export class QuestionDialog {
     input.onchange = () => {
       const file = input.files?.[0];
       if (file) {
+        if (this.mediaBlobUrl) URL.revokeObjectURL(this.mediaBlobUrl);
         this.error = undefined;
         this.media = file;
         this.mediaBlobUrl = URL.createObjectURL(file);

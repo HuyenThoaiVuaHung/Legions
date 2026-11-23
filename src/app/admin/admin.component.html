@@ -2,7 +2,6 @@
   @if (positionLabel()) {
     <small class="opacity-70 mr-2">{{ positionLabel() }}</small>
   }
-  <a mat-icon-button routerLink="/editor" matTooltip="Mở bộ biên tập cục bộ"><mat-icon>edit_note</mat-icon></a>
 </app-navbar>
 
 @if (session.createdRoomAdmin() && session.roomExpiring()) {

@@ -20,6 +20,7 @@ export interface GameRules {
   vcnvRowPoints: number;
   obstacleValueByRevealedCount: Record<number, number>;
   ttPointsByPlacement: number[];
+  ttQuestionSeconds: number[];
   ttVideoSeconds: number;
   vdStealTicks: number;
   vdWrongPenaltyDivisor: number;
@@ -45,8 +46,9 @@ const DEFAULT_RULES: Readonly<GameRules> = {
   kdDecisionTicks: 30,
   kdClockStartDelayMs: 1000,
   vcnvRowPoints: 10,
-  obstacleValueByRevealedCount: { 0: 50, 1: 50, 2: 40, 3: 30, 4: 20, 5: 10 },
+  obstacleValueByRevealedCount: { 0: 60, 1: 60, 2: 50, 3: 40, 4: 30, 5: 20 },
   ttPointsByPlacement: [40, 30, 20, 10],
+  ttQuestionSeconds: [20, 20, 30, 30],
   ttVideoSeconds: 30,
   vdStealTicks: 50,
   vdWrongPenaltyDivisor: 2,
@@ -60,6 +62,7 @@ function copyRules(rules: GameRules): GameRules {
     ...rules,
     obstacleValueByRevealedCount: { ...rules.obstacleValueByRevealedCount },
     ttPointsByPlacement: [...rules.ttPointsByPlacement],
+    ttQuestionSeconds: [...(rules.ttQuestionSeconds ?? DEFAULT_RULES.ttQuestionSeconds)],
   };
 }
 
@@ -81,10 +84,14 @@ export class ConfigService {
       );
       this.apply(config);
     } catch {
-      this.rules.set(copyRules(DEFAULT_RULES));
-      this.ui.set(null);
-      this.uploadLimitBytes.set(0);
+      this.reset();
     }
+  }
+
+  reset(): void {
+    this.rules.set(copyRules(DEFAULT_RULES));
+    this.ui.set(null);
+    this.uploadLimitBytes.set(0);
   }
 
   /** Apply a config payload (from GET, PATCH, or the update-config push). */

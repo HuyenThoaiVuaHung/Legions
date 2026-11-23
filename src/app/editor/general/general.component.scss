@@ -4,3 +4,13 @@ h6 {
 .mat-expansion-panel-header {
   @apply py-3
 }
+
+.hosted-settings {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+}
+
+.hosted-settings mat-expansion-panel {
+  margin-block: 0;
+}

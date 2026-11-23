@@ -66,12 +66,12 @@
     </mat-card-header>
     <mat-card-content class="overflow-y-auto min-h-0">
       @if (round(); as data) {
-        <button type="button" class="obstacle-image group relative block w-full aspect-video rounded-xl overflow-hidden" [class.empty]="!data.obstacle.imageFile" [disabled]="uploadingObstacle()" (click)="obstacleInput.click()" [matTooltip]="data.obstacle.imageFile ? 'Đổi ảnh chướng ngại vật' : 'Tải ảnh chướng ngại vật'">
-          @if (data.obstacle.imageFile) {
-            <img class="absolute inset-0 w-full h-full object-cover" [src]="media.resolve('vcnv', data.obstacle.imageFile)" alt="Hình ảnh chướng ngại vật" />
+        <button type="button" class="obstacle-image group relative block w-full aspect-video rounded-xl overflow-hidden" [class.empty]="!hasObstacleImage()" [disabled]="uploadingObstacle()" (click)="obstacleInput.click()" [matTooltip]="hasObstacleImage() ? 'Đổi ảnh chướng ngại vật' : 'Tải ảnh chướng ngại vật'">
+          @if (obstaclePreviewSrcs().length) {
+            <cnv-viewer class="absolute inset-0 block w-full h-full" [cnvMediaSrcs]="obstaclePreviewSrcs()" />
           }
-          <span class="obstacle-image-hint absolute inset-0 flex flex-col items-center justify-center gap-1 transition-opacity" [class.opacity-0]="data.obstacle.imageFile" [class.group-hover:opacity-100]="data.obstacle.imageFile" [class.group-focus-visible:opacity-100]="data.obstacle.imageFile">
-            @if (uploadingObstacle()) { <mat-progress-spinner mode="indeterminate" [diameter]="28" /> } @else { <mat-icon>add_photo_alternate</mat-icon>{{ data.obstacle.imageFile ? 'Đổi ảnh' : 'Tải ảnh lên' }} }
+          <span class="obstacle-image-hint absolute inset-0 flex flex-col items-center justify-center gap-1 transition-opacity" [class.opacity-0]="hasObstacleImage()" [class.group-hover:opacity-100]="hasObstacleImage()" [class.group-focus-visible:opacity-100]="hasObstacleImage()">
+            @if (uploadingObstacle()) { <mat-progress-spinner mode="indeterminate" [diameter]="28" /> } @else { <mat-icon>add_photo_alternate</mat-icon>{{ hasObstacleImage() ? 'Đổi ảnh' : 'Tải ảnh lên' }} }
           </span>
         </button>
         <input #obstacleInput type="file" accept="image/*" hidden (change)="onObstacleImage($event)" />

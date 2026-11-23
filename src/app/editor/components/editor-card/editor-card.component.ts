@@ -38,6 +38,7 @@ import { FileHandlerService } from '../../services/file.handler.service';
   styleUrl: './editor-card.component.scss'
 })
 export class EditorCardComponent implements OnInit {
+  protected get hosted(): boolean { return this.router.url.startsWith('/host/drafts'); }
   @Input({ required: true }) uid = '';
   @Input() editorData: IEditorData | undefined = undefined;
   constructor(
@@ -59,7 +60,7 @@ export class EditorCardComponent implements OnInit {
   }
   load() {
     if (this.editorData) this.editorDataService.setEditorData(this.editorData);
-    if (this.editorDataService.editorData) this.router.navigate(['/editor/general']);
+    if (this.editorDataService.editorData) this.router.navigate([this.router.url.startsWith('/host/drafts') ? '/host/drafts/general' : '/editor/general']);
   }
   async delete() {
     await this.editorDataService.deleteLocalEditorData(this.uid);

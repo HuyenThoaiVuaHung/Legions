@@ -12,14 +12,16 @@
       </mat-card-subtitle>
     </mat-card-header>
     <mat-card-content class="overflow-y-auto">
-      @if (currentQuestionPool().length > 0) {
+      @if (!activePlayer()) {
+        <div class="text-center">Vui lòng chọn thí sinh.</div>
+      } @else if (currentQuestionPool().length > 0) {
         <editable-table [rows]="currentQuestionPool()" [columns]="questionColumns" [selected]="chosenRow()" (cellSave)="saveQuestionCell($event)" (rowClick)="onClickQuestion($event)" (rowDblClick)="onDoubleClickQuestion($event)">
           <ng-template tableCell="value" let-row>
             <span class="flex items-center gap-2">{{ row.value }} @if (displayingRow() === row) { <mat-icon>visibility</mat-icon> }</span>
           </ng-template>
         </editable-table>
       } @else {
-        <div class="text-center">Vui lòng chọn thí sinh.</div>
+        <div class="text-center">Thí sinh này chưa có câu hỏi nào.</div>
       }
     </mat-card-content>
     <mat-card-actions align="end">
@@ -43,22 +45,33 @@
         <mat-icon>play_circle</mat-icon>
         Phát video
       </button>
-      <button matTooltip="Thêm câu hỏi" mat-icon-button (click)="addQuestion()">
+      <button [disabled]="!activePlayer()" matTooltip="Thêm câu hỏi" mat-icon-button (click)="addQuestion()">
         <mat-icon>add</mat-icon>
       </button>
-      <button matTooltip="Xóa câu hỏi" mat-icon-button (click)="deleteQuestion()">
+      <button [disabled]="!chosenRow()" matTooltip="Xóa câu hỏi" mat-icon-button (click)="deleteQuestion()">
         <mat-icon>remove</mat-icon>
       </button>
     </mat-card-actions>
   </mat-card>
   <mat-card class="w-full h-full" appearance="outlined">
     <mat-card-header>
-      <mat-card-title>Quản lý trận đấu</mat-card-title>
+      <mat-card-title>Quản lý vòng đấu</mat-card-title>
     </mat-card-header>
     <mat-card-content class="overflow-y-auto">
       <menu-item title="Thời gian" description="Thời gian còn lại {{ currentTime() }}">
         <button mat-button (click)="startTimer(15)">Bắt đầu 15s</button>
         <button mat-button (click)="startTimer(20)">Bắt đầu 20s</button>
+      </menu-item>
+      <menu-item
+        title="Điều khiển video"
+        description="Phát, bật toàn màn hình và chỉnh âm lượng video trên màn hình khán giả."
+        orientation="vertical"
+      >
+        <video-control-bar
+          target="vd"
+          [src]="displayingVideoUrl()"
+          [disabled]="displayingRow()?.type !== 'V'"
+        />
       </menu-item>
       <menu-item title="Ngôi sao hy vọng">
         <button mat-button (click)="toggleHopeStar()">

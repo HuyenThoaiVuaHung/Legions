@@ -1,0 +1,19 @@
+.cropper-dialog-content {
+  overflow: hidden;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.cropper-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+image-cropper {
+  width: 100%;
+  height: min(55vh, 460px);
+  --cropper-overlay-color: transparent;
+  --cropper-outline-color: rgba(0, 0, 0, 0.55);
+}

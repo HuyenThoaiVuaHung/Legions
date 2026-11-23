@@ -93,9 +93,11 @@
     @if (position() === 'VCNV_Q' || position() === 'VCNV_A') {
       @if (vcnvRound(); as vcnv) {
         <div>
-          <span>
-            <img class="w-60" [src]="vcnvObstacleImage()" />
-          </span>
+          @if (vcnvObstaclePreviewSrcs().length) {
+            <span class="inline-block w-60">
+              <cnv-viewer [cnvMediaSrcs]="vcnvObstaclePreviewSrcs()" />
+            </span>
+          }
           <div class="float-left">
             <span>
               @for (question of vcnv.questions; track question.id; let i = $index) {

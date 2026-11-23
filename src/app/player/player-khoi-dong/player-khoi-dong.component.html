@@ -1,60 +1,139 @@
-<div class="aurora-bg overflow-hidden box-border gap-5 p-10 flex h-full w-full">
-  <div class="gap-5 flex text-center flex-col items-center">
-    @if (maxQuestionNo() > 0) {
-      <span class="w-full text-2xl">Câu hỏi số</span>
-      <div class="grid text-7xl place-items-center w-full">
-        <span class="w-full"> {{ questionNo() }} : {{ maxQuestionNo() }} </span>
-        <mat-progress-bar
-          mode="determinate"
-          [value]="(questionNo() * 100) / maxQuestionNo()"
-          color="primary"
-        ></mat-progress-bar>
-      </div>
-    } @else {
-      <h6 class="w-full text-2xl">Phần thi</h6>
-      <h5>
-        <strong>{{ round()?.gamemode === 'M' ? 'Đối kháng' : 'Cá nhân' }}</strong>
-      </h5>
-    }
+<ng-template #questionBox>
+  <div
+    [class.text-gold]="gotTurn()"
+    [class.question-box-border]="gotTurn()"
+    class="disablePointerActions flex flex-col justify-between p-8 questionBox box-border shadow-lg flex-1 min-w-0 min-h-0 overflow-hidden"
+  >
+    <div class="flex-1 min-h-0 flex flex-col overflow-y-auto">
+      @if (isAudioQuestion()) {
+        <div class="mb-4">
+          <span class="kd-audio-badge">
+            <mat-icon aria-hidden="true">volume_up</mat-icon>
+            <span>Câu hỏi âm thanh</span>
+          </span>
+        </div>
+      }
 
-    <div class="text-4xl disablePointerActions relative z-2 py-3 w-full rounded-xl text-center">
-      <span [class.opacity-0]="timerBuzz() <= 0" class="text-4xl">{{ timerBuzz() / 10 }}s</span>
-      <span [class.opacity-0]="timerAnswer() <= 0" class="text-4xl">{{ timerAnswer() / 10 }}s</span>
+      @if (question(); as q) {
+        <p class="kd-question m-0">{{ q.question }}</p>
+        @if (imageUrl(); as src) {
+          <img [src]="src" alt="Hình ảnh câu hỏi" class="max-w-full max-h-[52vh] w-auto object-contain self-center mt-6 rounded-md" />
+        }
+      }
     </div>
 
+    @if (questionNo() > 1 && previousAnswer(); as prev) {
+      <div class="answer-box mt-6 px-5 py-3 flex items-baseline gap-3 self-start max-w-full">
+        <span class="kd-meta-label shrink-0">Đáp án trước</span>
+        <span class="text-xl font-medium truncate">{{ prev }}</span>
+      </div>
+    }
+  </div>
+</ng-template>
+
+@if (isPlayer()) {
+  <div class="aurora-bg overflow-hidden box-border gap-6 p-8 flex h-full w-full">
+    <div class="w-64 shrink-0 gap-4 flex text-center flex-col items-center">
+      @if (maxQuestionNo() > 0) {
+        <div class="w-full flex flex-col items-center gap-1.5">
+          <span class="kd-meta-label">{{ modeLabel() }}</span>
+          <span class="text-5xl font-bold tabular-nums leading-none">
+            {{ questionNo() }} <span class="opacity-40">/</span> {{ maxQuestionNo() }}
+          </span>
+          <mat-progress-bar
+            class="mt-1"
+            mode="determinate"
+            [value]="(questionNo() * 100) / maxQuestionNo()"
+            color="primary"
+          ></mat-progress-bar>
+        </div>
+      } @else {
+        <div class="w-full flex flex-col items-center gap-1">
+          <span class="kd-meta-label">Phần thi</span>
+          <span class="text-2xl font-bold">{{ modeLabel() }}</span>
+        </div>
+      }
+
+      <div
+        class="disablePointerActions py-1 w-full text-center flex flex-col items-center"
+        [class.kd-timer-urgent]="activeTimer()?.urgent"
+      >
+        @if (activeTimer(); as timer) {
+          <span class="text-4xl font-bold tabular-nums leading-tight">{{ timer.seconds }}s</span>
+          <span class="kd-meta-label">{{ timer.label }}</span>
+        } @else {
+          <span class="text-4xl font-bold opacity-0 leading-tight" aria-hidden="true">0.0s</span>
+          <span class="kd-meta-label opacity-0" aria-hidden="true">Chờ</span>
+        }
+      </div>
+
+      <player-list
+        [players]="session.match()?.players ?? []"
+        [turnIndex]="turnIndex()"
+        [highlightIndex]="round()?.gamemode === 'S' ? (round()?.activePlayerIndex ?? -1) : -1"
+        [selfIndex]="session.playerIndex()"
+      ></player-list>
+
+      @if (isMultiplayer()) {
+        <button
+          mat-fab
+          extended
+          type="button"
+          (click)="getAnswerTurn()"
+          [disabled]="answerButtonDisabled()"
+          class="big-button mt-auto"
+          color="primary"
+          aria-label="Giành quyền trả lời, phím tắt Space"
+        >
+          <span class="flex flex-col items-center gap-1">
+            <span class="text-xl font-bold tracking-wide">GIÀNH QUYỀN</span>
+            @if (!answerButtonDisabled()) {
+              <kbd class="kd-keycap">Space</kbd>
+            }
+          </span>
+        </button>
+      }
+    </div>
+
+    <ng-container [ngTemplateOutlet]="questionBox"></ng-container>
+  </div>
+} @else {
+  <div class="aurora-bg overflow-hidden box-border gap-4 p-6 flex flex-col h-full w-full">
+    <div class="flex items-center justify-between gap-4 px-1">
+      <div class="flex items-center gap-3">
+        <span class="text-sm font-bold uppercase tracking-wider text-primary">Khởi động</span>
+        <span class="kd-meta-label">{{ modeLabel() }}</span>
+      </div>
+
+      @if (maxQuestionNo() > 0) {
+        <div class="flex items-center gap-3 flex-1 max-w-xs">
+          <span class="text-sm font-semibold tabular-nums whitespace-nowrap">
+            Câu {{ questionNo() }} / {{ maxQuestionNo() }}
+          </span>
+          <mat-progress-bar
+            class="flex-1"
+            mode="determinate"
+            [value]="(questionNo() * 100) / maxQuestionNo()"
+            color="primary"
+          ></mat-progress-bar>
+        </div>
+      }
+
+      <div class="min-w-[8rem] text-right" [class.kd-timer-urgent]="activeTimer()?.urgent">
+        @if (activeTimer(); as timer) {
+          <span class="text-2xl font-bold tabular-nums">{{ timer.seconds }}s</span>
+          <span class="kd-meta-label ml-2">{{ timer.label }}</span>
+        }
+      </div>
+    </div>
+
+    <ng-container [ngTemplateOutlet]="questionBox"></ng-container>
+
     <player-list
+      layout="horizontal"
       [players]="session.match()?.players ?? []"
       [turnIndex]="turnIndex()"
       [highlightIndex]="round()?.gamemode === 'S' ? (round()?.activePlayerIndex ?? -1) : -1"
     ></player-list>
-
-    @if (session.role() === Role.Player && round()?.gamemode === 'M') {
-      <button
-        mat-fab
-        extended
-        (click)="getAnswerTurn()"
-        [disabled]="answerButtonDisabled()"
-        class="big-button"
-        color="primary"
-      >
-        <span class="mat-h2"> GIÀNH QUYỀN </span>
-      </button>
-    }
   </div>
-  <div
-    [class.text-gold]="gotTurn()"
-    class="disablePointerActions relative p-10 questionBox box-border shadow-lg w-full h-full text-3xl"
-  >
-    <span class="h-full flex flex-col w-full mat-headline-1">
-      {{ question()?.question }}
-      @if (imageUrl(); as src) {
-        <img [src]="src" class="max-w-2xl mt-10" />
-      }
-    </span>
-    @if (questionNo() > 1 && previousAnswer()) {
-      <div class="flex mt-10 bottom-32 left-16 answer-box absolute w-max p-5">
-        {{ previousAnswer() }}
-      </div>
-    }
-  </div>
-</div>
+}

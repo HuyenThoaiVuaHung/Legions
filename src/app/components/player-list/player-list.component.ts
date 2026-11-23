@@ -13,5 +13,9 @@ export class PlayerListComponent {
   readonly turnIndex = input(-1);
   /** 0-based index of the player to visually highlight, -1 for none. */
   readonly highlightIndex = input(-1);
+  /** Optional 0-based index of the logged-in player's own seat. */
+  readonly selfIndex = input<number | null>(null);
+  /** Layout direction: vertical column (default) or compact single-row bar. */
+  readonly layout = input<'vertical' | 'horizontal'>('vertical');
   readonly players = input<Player[]>([]);
 }

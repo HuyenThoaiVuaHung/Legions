@@ -1,0 +1,61 @@
+.share-title { overflow-wrap: anywhere; }
+.share-form { display: grid; gap: .75rem; padding-block-start: .75rem; margin-block-end: 1.25rem; }
+.share-account { width: 100%; }
+.share-invite-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .6rem; }
+.share-role { width: min(13rem, 100%); }
+.share-people h3, .share-general h3 { margin: 0 0 .5rem; }
+.member-list { list-style: none; padding: 0; margin: 0; }
+.member { display: flex; flex-wrap: nowrap; align-items: center; gap: .6rem; min-height: 3.25rem; }
+.member-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+  font: var(--mat-sys-label-large);
+}
+.owner-avatar {
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}
+.member-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.member-role, .member-name small, .share-link-access p { color: var(--mat-sys-on-surface-variant); }
+.member-role { flex: none; }
+.share-general {
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  margin-block-start: 1rem;
+  padding-block-start: 1rem;
+}
+.share-link-access {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: .75rem;
+}
+.share-link-access:has(.share-link-role) {
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+}
+.share-link-access > .member-avatar {
+  grid-area: 1 / 1 / 3 / 2;
+  align-self: center;
+}
+.share-link-mode { grid-area: 1 / 2; min-width: 0; }
+.share-link-role { grid-area: 1 / 3; justify-self: end; }
+.share-link-access mat-icon { flex: none; }
+.share-link-description {
+  grid-area: 2 / 2 / 3 / -1;
+  margin: .1rem 0 0;
+  font: var(--mat-sys-body-medium);
+}
+.share-link-description.with-trigger {
+  padding-inline-start: var(--mat-button-text-with-icon-horizontal-padding, 16px);
+}
+.share-actions { justify-content: space-between; gap: .5rem; }
+
+@media (max-width: 420px) {
+  .share-link-access:has(.share-link-role) { grid-template-columns: 2.25rem minmax(0, 1fr); }
+  .share-link-role { grid-area: 3 / 2; justify-self: start; }
+}

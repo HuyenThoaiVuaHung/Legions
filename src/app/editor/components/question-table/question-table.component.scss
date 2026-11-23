@@ -1,0 +1,18 @@
+.inline-edit {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: .15rem .25rem;
+  text-align: start;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-decoration-color: var(--mat-sys-outline-variant);
+  text-underline-offset: .25em;
+}
+
+.inline-edit:hover,.inline-edit:focus-visible {
+  color: var(--mat-sys-primary);
+  text-decoration-color: currentColor;
+}

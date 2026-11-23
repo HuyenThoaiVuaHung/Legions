@@ -1,4 +1,5 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
 import { adminGuard, hostGuard, mcGuard, roomGuard } from './core/guards';
 
 /** Pages a signed-in room member sees; mounted at the root for the single-room server and under room/:code when hosted. */
@@ -31,8 +32,15 @@ export const routes: Routes = [
   { path: 'r/:code/:view', loadComponent: () => import('./host/room-link.component').then(m => m.RoomLinkComponent) },
   { path: 'r/:code', loadComponent: () => import('./host/room-link.component').then(m => m.RoomLinkComponent) },
   {
+    path: 'share/questions/:id',
+    redirectTo: ({ params, fragment }) => inject(Router).createUrlTree(['/host/bank', params['id'], 'general'], {
+      queryParams: { shared: '1' },
+      fragment: fragment ?? undefined,
+    }),
+  },
+  {
     path: 'host',
-    canActivate: [hostGuard],
+    canActivateChild: [hostGuard],
     loadComponent: () => import('./host/host.component').then((m) => m.HostComponent),
     loadChildren: () => import('./host/host.routes').then((m) => m.HOST_ROUTES),
   },

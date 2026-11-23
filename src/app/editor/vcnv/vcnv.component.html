@@ -1,45 +1,58 @@
 @if (editorDataService.editorData){
-<div class="w-full h-full gap-5 flex">
-  <div class="flex flex-col flex-grow h-full">
-    <div>
-      <h3>
-        <strong>
-          Chướng ngại vật:
-          <editable
-            openBindingEvent="click"
-            (save)="editorDataService.saveCurrentEditorData()"
-            (cancel)="
-              editorDataService.editorData.questionBank.vcnv.cnv = cache
-            "
-            (modeChange)="
-              cache = editorDataService.editorData.questionBank.vcnv.cnv
-            "
-          >
-            <ng-template viewMode>
-              {{
+<div class="w-full h-full gap-6 flex">
+  <div class="flex flex-col flex-grow h-full min-w-0">
+    <div class="flex flex-wrap items-center justify-between gap-3 min-h-10 mb-3">
+      <div class="flex flex-wrap items-baseline gap-2.5">
+        <span class="mat-label-large opacity-75">Chướng ngại vật:</span>
+        <editable
+          #obstacleField
+          [enabled]="!editorDataService.hosted || (editorDataService.hosted.canEdit() && editorDataService.hosted.active() === 'settings')"
+          openBindingEvent="click"
+          (save)="saveObstacle()"
+          (cancel)="
+            editorDataService.editorData.questionBank.vcnv.cnv = cache;
+            editorDataService.hosted?.finish()
+          "
+          (modeChange)="
+            cache = editorDataService.editorData.questionBank.vcnv.cnv
+          "
+        >
+          <ng-template viewMode>
+            @let obstacle = editorDataService.editorData.questionBank.vcnv.cnv;
+            @if (editorDataService.hosted; as hosted) {
+              @if (hosted.canEdit() && !hosted.held('settings')) {
+                <button type="button" class="mat-title-large bg-transparent border-0 p-0 text-inherit text-left cursor-pointer underline decoration-dotted underline-offset-4" (click)="editObstacle(obstacleField)">{{ obstacle || 'Nhập đáp án' }}</button>
+              } @else {
+                <span class="mat-title-large">{{ obstacle || '—' }}</span>
+                @if (hosted.held('settings'); as holder) { <span class="mat-body-small ml-2 opacity-70">{{ holder }} đang chỉnh sửa</span> }
+              }
+            } @else {
+              <span class="mat-title-large cursor-pointer underline decoration-dotted underline-offset-4">{{
                 editorDataService.editorData.questionBank.vcnv.cnv != ""
                   ? editorDataService.editorData.questionBank.vcnv.cnv
-                  : "Nhấp để nhập."
-              }}
-            </ng-template>
-            <ng-template editMode>
-              <mat-form-field appearance="outline" class="min-w-40">
-                <input
-                  matInput
-                  [(ngModel)]="
-                    editorDataService.editorData.questionBank.vcnv.cnv
-                  "
-                />
-              </mat-form-field>
-            </ng-template>
-          </editable>
-        </strong>
-      </h3>
+                  : "Nhấp để nhập"
+              }}</span>
+            }
+          </ng-template>
+          <ng-template editMode>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic" class="min-w-48">
+              <input
+                matInput
+                editableOnEnter
+                editableOnEscape
+                editableFocusable
+                (blur)="obstacleField.editMode() && obstacleField.saveEdit()"
+                [(ngModel)]="
+                  editorDataService.editorData.questionBank.vcnv.cnv
+                "
+              />
+            </mat-form-field>
+          </ng-template>
+        </editable>
+      </div>
     </div>
-    <h3>
-      <strong> Danh sách câu hỏi </strong>
-    </h3>
     <question-table
+      context="vcnv"
       [allowDelete]="false"
       [questions]="editorDataService.editorData.questionBank.vcnv.questions"
       [allowCreate]="false"
@@ -48,26 +61,33 @@
     ></question-table>
   </div>
   <div class="min-w-[30rem]">
-    <h3>
-      <strong> Hình ảnh CNV </strong>
-      <button mat-stroked-button (click)="handleCnvImage()">
+    @let images = editorDataService.editorData.questionBank.vcnv.cnvMediaSrcs ?? [];
+    @let hosted = editorDataService.hosted;
+    @let showUpload = !hosted || hosted.hasEditAccess();
+    <div class="flex items-center justify-between gap-3 min-h-10 mb-3">
+      <h2 class="mat-title-medium !m-0">Hình ảnh CNV</h2>
+      @if (images.length && showUpload) {
+      <button mat-stroked-button [disabled]="!!editorDataService.hosted && (!editorDataService.hosted.canEdit() || !!editorDataService.hosted.held('settings'))" (click)="handleCnvImage()">
         <mat-icon>add</mat-icon>
-        Thêm hình ảnh
+        Đổi hình ảnh
       </button>
-    </h3>
+      }
+    </div>
     <div class="min-h-[18rem] rounded-xl">
       @if (imageProccessing) {
       <mat-progress-spinner
         mode="indeterminate"
         color="primary"
       ></mat-progress-spinner>
+      } @else if (images.length) {
+        <cnv-viewer [cnvMediaSrcs]="images" />
+      } @else if (showUpload) {
+        <image-input [title]="editorDataService.editorData.questionBank.vcnv.cnvMediaSrcNames.length ? 'Thay ảnh chướng ngại vật' : 'Ảnh chướng ngại vật'"
+          [disabled]="!!hosted && (!hosted.canEdit() || !!hosted.held('settings'))" (imageChangeEvent)="handleCnvImage($event)" />
+      } @else if (editorDataService.editorData.questionBank.vcnv.cnvMediaSrcNames.length) {
+        <app-empty-state icon="image_not_supported" title="Chưa thể hiển thị ảnh chướng ngại vật" />
       } @else {
-      <cnv-viewer
-        [cnvMediaSrcs]="
-          editorDataService.editorData.questionBank.vcnv.cnvMediaSrcs || []
-        "
-      >
-      </cnv-viewer>
+        <app-empty-state icon="image" title="Chưa có ảnh chướng ngại vật" />
       }
     </div>
   </div>

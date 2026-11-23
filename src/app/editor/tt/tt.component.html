@@ -1,159 +1,157 @@
 @if (editorDataService.editorData) {
-<h3 class="mb-6 flex items-center gap-5">
-  <strong>Câu hỏi số</strong>
-  @for (questionIndex of [0,1,2,3]; track questionIndex) {
+  @let hosted = editorDataService.hosted;
+  @let list = questions;
+  @let idx = activeIndex;
+  @let showUpload = !hosted || hosted.hasEditAccess();
+<div class="mb-3 flex flex-wrap items-center gap-3">
+  <span class="mat-label-large opacity-75">Câu hỏi số</span>
+  @for (q of list; track q.bankId ?? $index; let questionIndex = $index) {
   <button
     mat-stroked-button
-    [disabled]="this.selectedQuestionIndex == questionIndex"
-    (click)="this.selectedQuestionIndex = questionIndex"
+    [disabled]="idx === questionIndex"
+    (click)="selectedQuestionIndex = questionIndex; mediaError = ''"
   >
     {{ questionIndex + 1 }}
   </button>
   }
-</h3>
-<div class="flex flex-col h-[80%]">
-  <div class="h-max w-full flex justify-between">
-    <div>
-      <strong>Câu hỏi:</strong>
-      <editable (save)="editorDataService.saveCurrentEditorData()">
-        <ng-template viewMode>
-          {{
-            editorDataService.editorData.questionBank.tt.questions[
-              this.selectedQuestionIndex
-            ].question !== ""
-              ? editorDataService.editorData.questionBank.tt.questions[
-                  this.selectedQuestionIndex
-                ].question
-              : "Nhấp để nhập câu hỏi."
-          }}
-        </ng-template>
-        <ng-template editMode>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <input
-              matInput
-              editableOnEnter
-              editableOnEscape
-              [(ngModel)]="
-                editorDataService.editorData.questionBank.tt.questions[
-                  this.selectedQuestionIndex
-                ].question
-              "
-            />
-          </mat-form-field>
-        </ng-template>
-      </editable>
-      <br />
-      <strong>Đáp án:</strong>
-      <editable (save)="editorDataService.saveCurrentEditorData()">
-        <ng-template viewMode>
-          {{
-            editorDataService.editorData.questionBank.tt.questions[
-              this.selectedQuestionIndex
-            ].answer !== ""
-              ? editorDataService.editorData.questionBank.tt.questions[
-                  this.selectedQuestionIndex
-                ].answer
-              : "Nhấp để nhập đáp án."
-          }}
-        </ng-template>
-        <ng-template editMode>
-          <mat-form-field appearance="outline" subscriptSizing="dynamic">
-            <input
-              matInput
-              editableOnEnter
-              editableOnEscape
-              [(ngModel)]="
-                editorDataService.editorData.questionBank.tt.questions[
-                  this.selectedQuestionIndex
-                ].answer
-              "
-            />
-          </mat-form-field>
-        </ng-template>
-      </editable>
+  @if (showUpload) {
+    <button
+      mat-stroked-button
+      type="button"
+      [disabled]="list.length >= maxQuestions || (!!hosted && !hosted.canEdit())"
+      (click)="addQuestion()"
+    >
+      <mat-icon>add</mat-icon>
+      Thêm câu hỏi ({{ list.length }}/{{ maxQuestions }})
+    </button>
+    @if (idx >= 0 && (!hosted || list[idx].bankId)) {
+      <button
+        mat-button
+        type="button"
+        [disabled]="!!hosted && (!hosted.canEdit() || !!hosted.held(list[idx].bankId ?? ''))"
+        (click)="removeQuestion()"
+      >
+        <mat-icon>delete</mat-icon>
+        Xoá câu {{ idx + 1 }}
+      </button>
+    }
+  }
+</div>
+@if (idx < 0) {
+  <app-empty-state icon="quiz" title="Chưa có câu hỏi Tăng tốc nào">
+    @if (showUpload) {
+      <button mat-flat-button type="button" [disabled]="!!hosted && !hosted.canEdit()" (click)="addQuestion()">
+        <mat-icon>add</mat-icon>
+        Thêm câu hỏi đầu tiên
+      </button>
+    }
+  </app-empty-state>
+} @else {
+<div class="flex flex-col gap-3">
+  @let current = list[idx];
+  @let uploadDisabled = !!hosted && (!hosted.canEdit() || !!hosted.held(current.bankId ?? ''));
+  @if (hosted?.held(current.bankId ?? ''); as holder) { <p role="status">{{ holder }} đang chỉnh sửa.</p> }
+  @if (mediaError) { <p role="alert" class="text-sm text-[var(--mat-sys-error)]">{{ mediaError }}</p> }
+  <div class="h-max w-full flex flex-wrap justify-between gap-4">
+    <div class="flex flex-col gap-2">
+      <div class="flex flex-wrap items-baseline gap-2">
+        <span class="mat-label-large opacity-75">Câu hỏi:</span>
+        <editable #questionField [enabled]="canEditQuestion" (save)="saveField()" (cancel)="hosted?.finish()">
+          <ng-template viewMode>
+            @if (hosted && hosted.canEdit() && !hosted.held(current.bankId ?? '')) {
+              <button type="button" class="mat-body-large bg-transparent border-0 p-0 text-inherit cursor-pointer underline decoration-dotted underline-offset-4" (click)="openField(questionField)">{{ current.question || 'Nhập câu hỏi' }}</button>
+            } @else { <span class="mat-body-large">{{ current.question || (hosted ? '—' : 'Nhập câu hỏi') }}</span> }
+          </ng-template>
+          <ng-template editMode>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <input
+                matInput
+                editableFocusable
+                (blur)="questionField.editMode() && questionField.saveEdit()"
+                editableOnEnter
+                editableOnEscape
+                [(ngModel)]="current.question"
+              />
+            </mat-form-field>
+          </ng-template>
+        </editable>
+      </div>
+      <div class="flex flex-wrap items-baseline gap-2">
+        <span class="mat-label-large opacity-75">Đáp án:</span>
+        <editable #answerField [enabled]="canEditQuestion" (save)="saveField()" (cancel)="hosted?.finish()">
+          <ng-template viewMode>
+            @if (hosted && hosted.canEdit() && !hosted.held(current.bankId ?? '')) {
+              <button type="button" class="mat-body-large bg-transparent border-0 p-0 text-inherit cursor-pointer underline decoration-dotted underline-offset-4" (click)="openField(answerField)">{{ current.answer || 'Nhập đáp án' }}</button>
+            } @else { <span class="mat-body-large">{{ current.answer || (hosted ? '—' : 'Nhập đáp án') }}</span> }
+          </ng-template>
+          <ng-template editMode>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <input
+                matInput
+                editableFocusable
+                (blur)="answerField.editMode() && answerField.saveEdit()"
+                editableOnEnter
+                editableOnEscape
+                [(ngModel)]="current.answer"
+              />
+            </mat-form-field>
+          </ng-template>
+        </editable>
+      </div>
     </div>
-    <div class="h-full flex gap-5">
+    <div class="flex flex-wrap items-start gap-3">
+      @if (showUpload && current.mediaSrc) {
       <button
         (click)="uploadNewMedia()"
+        [disabled]="uploadDisabled"
         mat-stroked-button
-        matTooltip="Nhập ảnh mới"
       >
         <mat-icon>attach_file</mat-icon>
-        Nhập ảnh câu hỏi
+        Đổi ảnh hoặc video câu hỏi
       </button>
+      }
+      @if (showUpload && current.secondaryMediaSrc) {
       <button
         (click)="uploadNewMedia(true)"
+        [disabled]="uploadDisabled"
         mat-stroked-button
-        matTooltip="Nhập ảnh mới"
       >
         <mat-icon>attach_file</mat-icon>
-        Nhập ảnh đáp án
+        Đổi ảnh đáp án
       </button>
+      }
     </div>
   </div>
   <div
-    class="w-full h-full grid grid-flow-col place-items-center gap-5 items-center box-border px-10 py-5"
+    class="grid w-full grid-cols-1 gap-4 py-2 lg:grid-cols-2"
   >
-    @if (
-    editorDataService.editorData.questionBank.tt.questions[this.selectedQuestionIndex].mediaSrc
-    ) { @if(
-    editorDataService.editorData.questionBank.tt.questions[this.selectedQuestionIndex].type
-    === questionType.IMAGE) {
-    <div class="grid place-items-center">
-      <span>
-        <h6>
-          Câu hỏi
-        </h6>
-      </span>
-      <img
-        class="max-w-max w-10/12 max-h-[100%] rounded-xl"
-        [src]="
-          editorDataService.editorData.questionBank.tt.questions[
-            this.selectedQuestionIndex
-          ].mediaSrc
-        "
-      />
-    </div>
-    @if (
-    editorDataService.editorData.questionBank.tt.questions[this.selectedQuestionIndex].secondaryMediaSrcName
-    ) {
-    <div class="grid place-items-center">
-      <span>
-        <h6>
-          Đáp án
-        </h6>
-      </span>
-      <img
-        class="max-w-max w-10/12 max-h-[100%] rounded-xl"
-        [src]="
-          editorDataService.editorData.questionBank.tt.questions[
-            this.selectedQuestionIndex
-          ].secondaryMediaSrc
-        "
-      />
-    </div>
-    } } @else if (
-    editorDataService.editorData.questionBank.tt.questions[this.selectedQuestionIndex].type
-    === questionType.VIDEO) {
-    <video
-      class="h-full max-h-[50rem] rounded-xl"
-      controls
-      [src]="
-        editorDataService.editorData.questionBank.tt.questions[
-          this.selectedQuestionIndex
-        ].mediaSrc
-      "
-    ></video>
-    } @else {
-    <h5 class="w-full h-full text-center">
-      Định dạng câu hỏi không được hỗ trợ.
-    </h5>
-    } } @else {
-    <h5 class="w-full h-full text-center">
-      Vui lòng nhập hình ảnh/video cho câu hỏi.
-    </h5>
-    }
+    <section aria-label="Ảnh hoặc video câu hỏi" class="min-w-0">
+      @if (current.mediaSrc && current.type === questionType.IMAGE) {
+        <h3 class="mat-label-large opacity-75 !m-0 mb-2">Ảnh câu hỏi</h3>
+        <img class="media-preview rounded-xl" [src]="current.mediaSrc" alt="Ảnh câu hỏi" />
+      } @else if (current.mediaSrc && current.type === questionType.VIDEO) {
+        <h3 class="mat-label-large opacity-75 !m-0 mb-2">Video câu hỏi</h3>
+        <video class="media-preview rounded-xl" controls [src]="current.mediaSrc"></video>
+      } @else if (showUpload && !current.mediaSrc) {
+        <image-input [title]="current.mediaSrcName ? 'Thay ảnh hoặc video câu hỏi' : 'Ảnh hoặc video câu hỏi'"
+          [allowVideo]="true" [disabled]="uploadDisabled" (imageChangeEvent)="uploadNewMedia(false, $event)" />
+      } @else {
+        <app-empty-state icon="perm_media"
+          [title]="current.mediaSrcName ? 'Chưa thể hiển thị ảnh hoặc video' : 'Chưa có ảnh hoặc video câu hỏi'" />
+      }
+    </section>
+    <section aria-label="Ảnh đáp án" class="min-w-0">
+      @if (current.secondaryMediaSrc) {
+        <h3 class="mat-label-large opacity-75 !m-0 mb-2">Ảnh đáp án (tuỳ chọn)</h3>
+        <img class="media-preview rounded-xl" [src]="current.secondaryMediaSrc" alt="Ảnh đáp án" />
+      } @else if (showUpload) {
+        <image-input [title]="current.secondaryMediaSrcName ? 'Thay ảnh đáp án' : 'Ảnh đáp án (tuỳ chọn)'"
+          [disabled]="uploadDisabled" (imageChangeEvent)="uploadNewMedia(true, $event)" />
+      } @else {
+        <app-empty-state icon="image" [title]="current.secondaryMediaSrcName ? 'Chưa thể hiển thị ảnh đáp án' : 'Chưa có ảnh đáp án'" />
+      }
+    </section>
   </div>
 </div>
-
+}
 }

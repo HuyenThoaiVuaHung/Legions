@@ -9,6 +9,7 @@ import { MatRadioButton, MatRadioGroup } from '@angular/material/radio';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TtQuestion } from '../../../core/contracts/game';
 import { ApiService } from '../../../core/services/api.service';
+import { DialogService } from '../../../editor/services/dialog.service';
 
 @Component({
   selector: 'app-form-q-tt',
@@ -29,6 +30,7 @@ import { ApiService } from '../../../core/services/api.service';
 })
 export class FormQTtComponent {
   private readonly api = inject(ApiService);
+  private readonly dialogService = inject(DialogService);
   private readonly snackBar = inject(MatSnackBar);
   readonly dialogRef = inject<MatDialogRef<FormQTtComponent, TtQuestion>>(MatDialogRef);
   private readonly initial = inject<TtQuestion>(MAT_DIALOG_DATA);
@@ -39,8 +41,14 @@ export class FormQTtComponent {
   readonly uploadingVideo = signal(false);
 
   async onQuestionImageSelected(event: Event): Promise<void> {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    let file: File | undefined = input.files?.[0];
+    input.value = '';
     if (!file) return;
+    if (file.type !== 'image/gif') {
+      file = await this.dialogService.openCropDialog(file, 16, 9);
+      if (!file) return;
+    }
     this.uploadingQuestionImage.set(true);
     try {
       const { fileName } = await this.api.uploadMedia('tt', file);
@@ -53,8 +61,14 @@ export class FormQTtComponent {
   }
 
   async onAnswerImageSelected(event: Event): Promise<void> {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    let file: File | undefined = input.files?.[0];
+    input.value = '';
     if (!file) return;
+    if (file.type !== 'image/gif') {
+      file = await this.dialogService.openCropDialog(file, 16, 9);
+      if (!file) return;
+    }
     this.uploadingAnswerImage.set(true);
     try {
       const { fileName } = await this.api.uploadMedia('tt', file);
@@ -66,8 +80,13 @@ export class FormQTtComponent {
     }
   }
 
+  clearAnswerImage(): void {
+    this.form.answerImage = undefined;
+  }
+
   async onVideoSelected(event: Event): Promise<void> {
-    const file = (event.target as HTMLInputElement).files?.[0];
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
     this.uploadingVideo.set(true);
     try {
@@ -77,6 +96,7 @@ export class FormQTtComponent {
       this.snackBar.open('Không thể tải video lên máy chủ.', 'Đóng');
     } finally {
       this.uploadingVideo.set(false);
+      input.value = '';
     }
   }
 
@@ -85,8 +105,8 @@ export class FormQTtComponent {
       this.snackBar.open('Nhập đầy đủ câu hỏi và đáp án trước khi lưu.', 'Đóng');
       return;
     }
-    if (this.form.type === 'image' && (!this.form.questionImage || !this.form.answerImage)) {
-      this.snackBar.open('Tải đủ ảnh câu hỏi và đáp án trước khi lưu.', 'Đóng');
+    if (this.form.type === 'image' && !this.form.questionImage) {
+      this.snackBar.open('Tải ảnh câu hỏi trước khi lưu.', 'Đóng');
       return;
     }
     if (this.form.type === 'video' && !this.form.videoFile) {

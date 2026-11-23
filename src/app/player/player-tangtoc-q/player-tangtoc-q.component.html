@@ -11,23 +11,23 @@
       [highlightIndex]="session.playerIndex() ?? -1"
     ></player-list>
   </div>
-  <div class="text-3xl flex flex-col gap-3">
-    @if (currentQuestion()?.type === 'video') {
-      <video
-        muted="true"
-        id="video-1"
-        class="disablePointerActions questionBox z-10 w-full h-full"
-        preload="auto"
-        [attr.poster]="media.placeholder"
-      >
-        <source [src]="videoUrl()" type="video/mp4" />
-      </video>
-    } @else if (currentQuestion()?.type === 'image' && imageUrl()) {
-      <img [src]="imageUrl()" class="disablePointerActions questionBox object-cover w-full h-full" />
+  <div class="text-3xl flex-1 min-w-0 min-h-0 flex flex-col gap-3">
+    @if (answerImageUrl(); as src) {
+      <img [src]="src" class="disablePointerActions questionBox object-contain w-full min-h-0 flex-1" />
+    } @else if (currentQuestion()?.type === 'video' && videoUrl(); as src) {
+      <stage-video-player
+        class="questionBox z-10 w-full min-h-0 flex-1"
+        [src]="src"
+        target="tt"
+        [poster]="media.placeholder"
+        [allowRemoteFullscreen]="session.role() === Role.Viewer"
+      />
+    } @else if (currentQuestion()?.type === 'image' && imageUrl(); as src) {
+      <img [src]="src" class="disablePointerActions questionBox object-contain w-full min-h-0 flex-1" />
     } @else {
       <img
         [src]="media.placeholder"
-        class="shadow-xl disablePointerActions questionBox w-full h-full"
+        class="shadow-xl disablePointerActions questionBox object-contain w-full min-h-0 flex-1"
       />
     }
     <div class="w-full flex gap-2 justify-center items-center">

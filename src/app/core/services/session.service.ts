@@ -1,12 +1,12 @@
 import { computed, effect, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Role, TokenPayload, JoinRoomResponse } from '../contracts/api';
-import { MatchState } from '../contracts/game';
+import { LiveStateSnapshot, MatchState } from '../contracts/game';
 import { PLAYER_ROUTE_BY_POSITION, STORAGE_KEYS } from '../constants';
 import { TokenStore } from './token.store';
 import { ApiService } from './api.service';
 import { ConfigService, PublicConfig } from './config.service';
-import { NetworkService } from './network.service';
+import { ConnectionStatus, NetworkService } from './network.service';
 
 const MATCH_UPDATE_EVENT = 'update-match-data';
 
@@ -36,6 +36,7 @@ export class SessionService {
   readonly createdRoomAdmin = computed(() => this.role() === Role.Admin && this.multiRoom() && !!this.roomId() && this.roomId() !== 'default');
   readonly roomExpiring = signal<number | null>(null);
   readonly match = signal<MatchState | null>(null);
+  readonly liveState = signal<LiveStateSnapshot | null>(null);
 
   readonly role = computed<Role | null>(() => this.identity()?.roleId ?? null);
   readonly playerIndex = computed(() => this.identity()?.index ?? null);
@@ -48,13 +49,19 @@ export class SessionService {
     effect(() => {
       const position = this.match()?.position;
       const role = this.role();
-      if (!this.followMatch() || !position || position === 'H' || (role !== Role.Player && role !== Role.Viewer)) return;
+      if (!this.followMatch() || !position || (role !== Role.Player && role !== Role.Viewer)) return;
+      if (position === 'H') {
+        if (this.multiRoom() || this.router.url.includes('/player')) {
+          void this.router.navigateByUrl(this.base() + '/player/waiting');
+        }
+        return;
+      }
       const route = PLAYER_ROUTE_BY_POSITION[position];
       if (route) void this.router.navigateByUrl(this.base() + route);
     });
 
-    const savedUrl = this.network.serverUrl();
-    this.ready = savedUrl ? this.connect(savedUrl).catch(() => undefined) : Promise.resolve();
+    const savedUrl = this.network.serverUrl() || window.location.origin;
+    this.ready = this.connect(savedUrl).catch(() => undefined);
   }
 
   get token(): string | null {
@@ -70,22 +77,34 @@ export class SessionService {
       this.identity.set(null);
     }
     this.serverReady.set(false);
-    this.network.connect(url, this.token ?? undefined);
-    this.multiRoom.set((await this.api.serverInfo()).multiRoom);
+    this.network.closeRoomSocket();
+    this.identity.set(null);
+    this.match.set(null);
+    this.liveState.set(null);
+    this.roomExpiring.set(null);
+    this.config.reset();
+    this.network.serverUrl.set(url);
+    this.network.status.set(ConnectionStatus.Connecting);
+    try {
+      this.multiRoom.set((await this.api.serverInfo()).multiRoom);
+    } catch (error) {
+      this.network.status.set(ConnectionStatus.Error);
+      throw error;
+    }
     localStorage.setItem(STORAGE_KEYS.serverUrl, url);
     this.serverReady.set(true);
-    this.network.on<[MatchState]>(MATCH_UPDATE_EVENT, (match) => this.match.set(match));
-    if (this.token) {
+    if (this.token && (!this.multiRoom() || this.roomCode())) {
       try {
         await this.refreshIdentityFromToken();
       } catch {
         this.clearToken();
       }
     }
-    await this.config.load();
-    this.network.on<[PublicConfig]>('update-config', (config) => this.config.apply(config));
-    this.watchRoomExpiry();
-    try { this.match.set(await this.api.getMatch()); } catch { this.match.set(null); }
+    if (this.multiRoom() && !this.roomId()) {
+      this.network.closeRoomSocket();
+      return;
+    }
+    await this.loadRoom(this.token ?? undefined);
   }
 
   /** Exchange a secret for a token, reconnect the socket with it. */
@@ -98,7 +117,11 @@ export class SessionService {
   /** Where each role starts inside the active room. */
   homeFor(role: Role): string {
     const base = this.base();
-    return role === Role.Admin ? base + '/admin' : role === Role.Mc ? base + '/mc' : base + '/player/points';
+    if (role === Role.Admin) return base + '/admin';
+    if (role === Role.Mc) return base + '/mc';
+    const position = this.match()?.position;
+    if (position && position !== 'H') return base + (PLAYER_ROUTE_BY_POSITION[position] ?? '/player/waiting');
+    return base + '/player/waiting';
   }
 
   /** Switch to the room named in the URL; false when there is no usable token for it. */
@@ -106,14 +129,16 @@ export class SessionService {
     if (this.tokens.code() === code && this.identity()) return true;
     this.tokens.use(code);
     this.identity.set(null);
+    this.match.set(null);
+    this.liveState.set(null);
+    this.roomExpiring.set(null);
+    this.config.reset();
+    this.network.closeRoomSocket();
     const token = this.token;
     if (!token) return false;
-    this.network.connect(this.network.serverUrl(), token);
-    this.network.on<[MatchState]>(MATCH_UPDATE_EVENT, (match) => this.match.set(match));
-    this.network.on<[PublicConfig]>('update-config', (config) => this.config.apply(config));
-    this.watchRoomExpiry();
     try { await this.refreshIdentityFromToken(); } catch { this.clearToken(); return false; }
-    try { this.match.set(await this.api.getMatch()); } catch { this.match.set(null); }
+    if (this.multiRoom() && !this.roomId()) return false;
+    await this.loadRoom(token);
     return true;
   }
 
@@ -122,12 +147,33 @@ export class SessionService {
     if (code) this.tokens.use(code);
     this.tokens.set(response.token);
     this.identity.set({ roleId: response.roleId, index: response.index, roomId: response.roomId });
-    this.network.connect(this.network.serverUrl(), response.token);
+    await this.loadRoom(response.token);
+  }
+
+  private async loadRoom(token?: string): Promise<void> {
+    this.liveState.set(null);
+    let hasConnectedOnce = false;
+    this.network.connect(this.network.serverUrl(), token);
     this.network.on<[MatchState]>(MATCH_UPDATE_EVENT, (match) => this.match.set(match));
+    this.network.on<[LiveStateSnapshot]>('live-state', (snapshot) => this.liveState.set(snapshot));
     this.network.on<[PublicConfig]>('update-config', (config) => this.config.apply(config));
+    this.network.on<[]>('connect', () => {
+      if (hasConnectedOnce) {
+        // Reconnected after a drop: re-sync match state (server pushes fresh live-state automatically).
+        void this.api.getMatch().then((m) => this.match.set(m)).catch(() => undefined);
+      }
+      hasConnectedOnce = true;
+    });
     this.watchRoomExpiry();
     await this.config.load();
-    try { this.match.set(await this.api.getMatch()); } catch { this.match.set(null); }
+    await Promise.all([
+      this.api.getMatch().then((m) => this.match.set(m)).catch(() => this.match.set(null)),
+      this.api.getLiveState().then((s) => {
+        // Don't overwrite a fresher socket snapshot if one already arrived.
+        const current = this.liveState();
+        if (!current || s.serverTime >= current.serverTime) this.liveState.set(s);
+      }).catch(() => undefined),
+    ]);
   }
 
   /**
@@ -141,6 +187,12 @@ export class SessionService {
     this.clearToken();
     this.identity.set(null);
     this.roomExpiring.set(null);
+    if (this.multiRoom()) {
+      this.network.closeRoomSocket();
+      this.match.set(null);
+      this.config.reset();
+      return;
+    }
     const url = this.network.serverUrl();
     if (url) {
       this.network.connect(url);

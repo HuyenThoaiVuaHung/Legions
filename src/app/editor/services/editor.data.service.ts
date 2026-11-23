@@ -1,4 +1,4 @@
-import { O24ControlType, IEditorData, Pallette, IQuestionBank, IQuestion, MatchPosition, QuestionType, IKdQuestionData } from '../editor.interfaces';
+import { O24ControlType, IEditorData, Pallette, IQuestionBank, IQuestion, MatchPosition, MatchVersion, QuestionType, IKdQuestionData } from '../editor.interfaces';
 import { effect, inject, Injectable } from '@angular/core';
 
 import { FsService } from './fs.service';
@@ -6,6 +6,7 @@ import { DialogService } from './dialog.service';
 import { EditorStatus } from './enums/editor.enum';
 import { EditorMediaService } from './editor.media.service';
 import { MatSelectChange } from '@angular/material/select';
+import { HostedEditorSession } from '../../host/hosted-editor-session';
 
 /** Fields that only exist at runtime (blob URLs) and never belong in a saved file. */
 const RUNTIME_ONLY_KEYS = ['mediaSrc', 'secondaryMediaSrc', 'cnvMediaSrcs', 'miscImageSrc'];
@@ -16,6 +17,7 @@ const emptyPools = (count: number): IQuestion[][] => Array.from({ length: count 
   providedIn: 'root',
 })
 export class EditorDataService {
+  readonly hosted = inject(HostedEditorSession, { optional: true });
   constructor(
     private fs: FsService,
     private dialogService: DialogService,
@@ -28,7 +30,12 @@ export class EditorDataService {
    * The working editor data.
    * Default value is undefined.
    */
-  public editorData: IEditorData | undefined = undefined;
+  private localData?: IEditorData;
+  public get editorData(): IEditorData | undefined { return this.hosted ? this.hosted.data : this.localData; }
+  public set editorData(value: IEditorData | undefined) {
+    if (this.hosted) this.hosted.data = value;
+    else this.localData = value;
+  }
   /**
    * The status of the editor.
    * Possible values are:
@@ -59,7 +66,7 @@ export class EditorDataService {
       },
       matchData: {
         matchName: 'Trận đấu mới',
-        matchVersion: 24,
+        matchVersion: 26,
         matchPos: MatchPosition.IDLE,
         players: [
           {
@@ -137,30 +144,32 @@ export class EditorDataService {
     title: 'Bạn có chắc không?',
     message: 'Điều này sẽ xoá toàn bộ dữ liệu của phần thi khởi động hiện tại.',
   };
-  public async handleMatchVersionChange(snapshot: 23 | 24) {
-    if (this.editorData) {
-      if (
-        (await this.dialogService.openConfirmationDialog(
-          this.matchVersionChangeMessage.title,
-          this.matchVersionChangeMessage.message
-        )) == true
-      ) {
-        this.editorData.questionBank.kd = {};
-        if (this.editorData.matchData.matchVersion === 23) {
-          this.editorData.questionBank.kd.o23Questions = emptyPools(3);
-        } else if (this.editorData.matchData.matchVersion === 24) {
-          {
-            this.editorData.questionBank.kd.o24Questions = {
-              [O24ControlType.MULTIPLAYER]: [],
-              [O24ControlType.SINGLEPLAYER]: emptyPools(4),
-            };
-          }
-        }
-        this.saveCurrentEditorData();
-        //TODO: Implement value change for VCNV questions.
+  public async handleMatchVersionChange(snapshot: MatchVersion) {
+    if (!this.editorData) return;
+    const next = this.editorData.matchData.matchVersion;
+    const structuralKdChange = (snapshot === 23) !== (next === 23);
+    if (!structuralKdChange) {
+      this.saveCurrentEditorData();
+      return;
+    }
+    if (
+      (await this.dialogService.openConfirmationDialog(
+        this.matchVersionChangeMessage.title,
+        this.matchVersionChangeMessage.message
+      )) == true
+    ) {
+      this.editorData.questionBank.kd = {};
+      if (next === 23) {
+        this.editorData.questionBank.kd.o23Questions = emptyPools(3);
       } else {
-        this.editorData.matchData.matchVersion = snapshot;
+        this.editorData.questionBank.kd.o24Questions = {
+          [O24ControlType.MULTIPLAYER]: [],
+          [O24ControlType.SINGLEPLAYER]: emptyPools(4),
+        };
       }
+      this.saveCurrentEditorData();
+    } else {
+      this.editorData.matchData.matchVersion = snapshot;
     }
   }
   /**
@@ -212,6 +221,7 @@ export class EditorDataService {
    * Save the current editor data to local storage with debouncing.
    */
   public saveCurrentEditorData() {
+    if (this.hosted) { void this.hosted.save(); return; }
     //implement debouncing
     if (this.editorData) {
       clearInterval(this.ioWorker);
@@ -225,6 +235,13 @@ export class EditorDataService {
         }
         this.editorStatus = EditorStatus.SAVED;
       }, 500);
+    }
+  }
+  public async flushCurrentEditorData(): Promise<void> {
+    clearTimeout(this.ioWorker);
+    if (this.editorData) {
+      this.editorData.dateModified = Date.now();
+      await this.saveLocalEditorData(this.editorData);
     }
   }
   /**
@@ -262,6 +279,7 @@ export class EditorDataService {
     return this.resolveMediaSrcs(editorData);
   }
   public async resolveMediaSrcs(editorData: IEditorData) {
+    if (this.hosted) return this.hosted.resolveMedia(editorData);
     editorData.questionBank = await this.media.resolveQuestionBankMediaSrc(
       editorData.questionBank,
       editorData.uid,

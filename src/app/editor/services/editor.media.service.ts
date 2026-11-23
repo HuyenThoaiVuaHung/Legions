@@ -1,4 +1,6 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { HostedEditorSession } from '../../host/hosted-editor-session';
+import { splitVcnvImage } from '../../core/vcnv-image.util';
 import { IQuestionBank, IQuestion, O24ControlType, QuestionType, IMiscMedia } from '../editor.interfaces';
 
 import { FsService } from './fs.service';
@@ -7,6 +9,7 @@ import { FsService } from './fs.service';
   providedIn: 'root',
 })
 export class EditorMediaService {
+  private readonly hosted = inject(HostedEditorSession, { optional: true });
   constructor(public fs: FsService) { }
   public getMediaType(filetype: string): QuestionType {
     if (filetype.startsWith('image')) return QuestionType.IMAGE;
@@ -21,12 +24,14 @@ export class EditorMediaService {
     uid: string,
     isSecondary: boolean = false
   ): Promise<IQuestion> {
-    const ext = media.name.split('.').pop();
-    question.type = this.getMediaType(media.type);
-    console.log(question.type, media.type, 'type');
-    if (question.type === QuestionType.TEXT) return question;
-    if (!isSecondary) question.mediaSrcName = await this.setMedia(uid, media, kind);
-    else question.secondaryMediaSrcName = await this.setMedia(uid, media, kind);
+    const type = this.getMediaType(media.type);
+    if (type === QuestionType.TEXT) return question;
+    const name = await this.setMedia(uid, media, kind);
+    if (isSecondary) question.secondaryMediaSrcName = name;
+    else {
+      question.type = type;
+      question.mediaSrcName = name;
+    }
     return question;
   }
   /**
@@ -52,14 +57,11 @@ export class EditorMediaService {
         }
       }
       else question.mediaSrc = undefined;
-      if (question.secondaryMediaSrcName) {
-        question.secondaryMediaSrc = await this.fs.getBlobUrl(
-          `${dataUid}/${kind}/${question.secondaryMediaSrcName}`
-        );
-        if (blobHandler) {
-          await blobHandler(await this.fs.getFile(`${dataUid}/${kind}/${question.secondaryMediaSrcName}`), kind);
-        }
-      }
+    }
+    if (question.secondaryMediaSrcName) {
+      const path = `${dataUid}/${kind}/${question.secondaryMediaSrcName}`;
+      question.secondaryMediaSrc = await this.fs.getBlobUrl(path);
+      if (blobHandler) await blobHandler(await this.fs.getFile(path), kind);
     }
     return question;
   }
@@ -120,9 +122,11 @@ export class EditorMediaService {
       dataUid, blobHandler
     );
 
-    for (let questions of questionBank.vd.questions) {
-      questions = await this.resolveQuestionsMediaSrc(questions, 'vd', dataUid, blobHandler);
-    }
+    questionBank.vd.questions = await Promise.all(
+      questionBank.vd.questions.map((questions) =>
+        this.resolveQuestionsMediaSrc(questions, 'vd', dataUid, blobHandler)
+      )
+    );
 
     questionBank.chp.questions = await this.resolveQuestionsMediaSrc(questionBank.chp.questions, 'chp', dataUid, blobHandler)
     if (ver) {
@@ -156,87 +160,12 @@ export class EditorMediaService {
     return questionBank;
   }
   public async handleCnvMedia(file: File, uid: string): Promise<string[]> {
+    const pieces = await splitVcnvImage(file);
     const mediaSrcNames: string[] = [];
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d')!;
-    const img = new Image();
-    img.src = URL.createObjectURL(file);
-    img.setAttribute('crossorigin', 'anonymous');
-    const width = (canvas.width = 1920);
-    const height = (canvas.height = 1080);
-    const canvasImgBlob = async () => {
-      return await new Promise<Blob>((resolve) => {
-        canvas.toBlob((blob) => resolve(blob!));
-      });
-    };
-    // First corner
-    await this.wait(500);
-    ctx.drawImage(img, 0, 0, width, height);
-    ctx.clearRect(width / 4, height / 4, (width * 3) / 4, (height * 3) / 4);
-    ctx.clearRect(0, height / 2, (width * 3) / 4, (height * 3) / 4);
-    ctx.clearRect(width / 2, 0, (width * 3) / 4, (height * 3) / 4);
-    mediaSrcNames.push(
-      await this.setMedia(
-        uid,
-        new File([await canvasImgBlob()], crypto.randomUUID() + '.png'),
-        'vcnv'
-      )
-    );
-    // Second corner
-    ctx.drawImage(img, 0, 0, width, height);
-    ctx.clearRect(0, height / 4, (width * 3) / 4, (height * 3) / 4);
-    ctx.clearRect(0, 0, (width * 2) / 4, (height * 3) / 4);
-    ctx.clearRect((width * 3) / 4, height / 2, width, (height * 3) / 4);
-    mediaSrcNames.push(
-      await this.setMedia(
-        uid,
-        new File([await canvasImgBlob()], crypto.randomUUID() + '.png'),
-        'vcnv'
-      )
-    );
-    ctx.drawImage(img, 0, 0, width, height);
-
-    // Third corner
-    ctx.clearRect(0, 0, (width * 3) / 4, (height * 3) / 4);
-    ctx.clearRect(0, (height * 3) / 4, (width * 2) / 4, (height * 3) / 4);
-    ctx.clearRect((width * 3) / 4, 0, width / 4, (height * 1) / 2);
-    mediaSrcNames.push(
-      await this.setMedia(
-        uid,
-        new File([await canvasImgBlob()], crypto.randomUUID() + '.png'),
-        'vcnv'
-      )
-    );
-    ctx.drawImage(img, 0, 0, width, height);
-
-    // Fourth corner
-    ctx.clearRect(width / 4, 0, (width * 3) / 4, (height * 3) / 4);
-    ctx.clearRect(0, 0, width / 4, height / 2);
-    ctx.clearRect(width / 2, (height * 3) / 4, width / 2, height / 4);
-    mediaSrcNames.push(
-      await this.setMedia(
-        uid,
-        new File([await canvasImgBlob()], crypto.randomUUID() + '.png'),
-        'vcnv'
-      )
-    );
-
-    ctx.drawImage(img, 0, 0, width, height);
-
-    // Middle piece
-    ctx.clearRect(0, 0, width, height);
-    ctx.beginPath();
-    ctx.rect((width * 1) / 4, (height * 1) / 4, width / 2, height / 2);
-    ctx.clip();
-    ctx.drawImage(img, 0, 0, width, height);
-    mediaSrcNames.push(
-      await this.setMedia(
-        uid,
-        new File([await canvasImgBlob()], crypto.randomUUID + '.png'),
-        'vcnv'
-      )
-    );
-
+    for (let i = 0; i < pieces.length; i++) {
+      const pieceFile = new File([pieces[i]], `${crypto.randomUUID()}.png`, { type: 'image/png' });
+      mediaSrcNames.push(await this.setMedia(uid, pieceFile, 'vcnv'));
+    }
     return mediaSrcNames;
   }
   /**
@@ -252,12 +181,16 @@ export class EditorMediaService {
     questionBank.vcnv.questions = this.stripQuestionsMediaSrc(
       questionBank.vcnv.questions
     );
+    questionBank.vcnv.cnvMediaSrcs = undefined;
     questionBank.tt.questions = this.stripQuestionsMediaSrc(
       questionBank.tt.questions
     );
-    for (let questions of questionBank.vd.questions) {
-      questions = this.stripQuestionsMediaSrc(questions);
-    }
+    questionBank.vd.questions = questionBank.vd.questions.map((questions) =>
+      this.stripQuestionsMediaSrc(questions)
+    );
+    questionBank.chp.questions = this.stripQuestionsMediaSrc(
+      questionBank.chp.questions
+    );
     if (ver) {
       if (ver === 23) {
         if (questionBank.kd.o23Questions) {
@@ -271,16 +204,14 @@ export class EditorMediaService {
             this.stripQuestionsMediaSrc(
               questionBank.kd.o24Questions[O24ControlType.MULTIPLAYER]
             );
-          questionBank.kd.o24Questions[O24ControlType.SINGLEPLAYER].map((questions) =>
-            this.stripQuestionsMediaSrc(questions)
-          );
+          questionBank.kd.o24Questions[O24ControlType.SINGLEPLAYER] =
+            questionBank.kd.o24Questions[O24ControlType.SINGLEPLAYER].map((questions) =>
+              this.stripQuestionsMediaSrc(questions)
+            );
         } else throw new Error('Invalid question bank version');
       }
     }
     return questionBank;
-  }
-  async wait(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
   }
   /**
    *
@@ -298,6 +229,7 @@ export class EditorMediaService {
    */
   public stripQuestionMediaSrc(question: IQuestion): IQuestion {
     question.mediaSrc = undefined;
+    question.secondaryMediaSrc = undefined;
     return question;
   }
 
@@ -351,6 +283,7 @@ export class EditorMediaService {
     media: File,
     kind: 'kd' | 'vcnv' | 'tt' | 'vd' | 'chp' | 'misc'
   ): Promise<string> {
+    if (this.hosted) return this.hosted.upload(kind, media);
     const mediaSrcName =
       crypto.randomUUID() + '.' + media.name.split('.').pop();
     await this.fs.writeLocalFile(media, `${uid}/${kind}/${mediaSrcName}`);

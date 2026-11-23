@@ -103,3 +103,11 @@ export async function uploadObstacleImage(api: ApiService, file: File): Promise<
   const uploaded = await Promise.all(pieces.map((piece, index) => api.uploadObstaclePiece(piece, `piece-${index}.png`)));
   return { imageFile: fileName, imagePieceFiles: uploaded.map(({ fileName: name }) => name) };
 }
+
+/** Fetches all 5 protected obstacle pieces via authenticated HTTP (for Admin/MC previews). */
+export async function fetchObstaclePieceUrls(api: ApiService): Promise<string[]> {
+  const blobs = await Promise.all(
+    Array.from({ length: VCNV_PIECE_COUNT }, (_, index) => api.getObstaclePiece(index)),
+  );
+  return blobs.map((blob) => URL.createObjectURL(blob));
+}

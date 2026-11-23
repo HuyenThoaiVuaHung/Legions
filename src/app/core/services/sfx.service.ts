@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
+import { ActiveAudioState, LiveStateSnapshot } from '../contracts/game';
 
 /**
  * Sound-effect codes are part of the socket protocol ('play-sfx' payloads).
@@ -46,21 +47,182 @@ const SFX_FILES: Readonly<Record<string, string>> = {
   VD_END: 'assets/audio-assets/vd/FinishRound.mp3',
 };
 
+interface PendingTrack {
+  code: string;
+  loop: boolean;
+  baseOffsetSec: number;
+  recordedAt: number;
+  durationMs?: number;
+  key: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class SfxService {
   private loopingAudio: HTMLAudioElement | null = null;
+  private loopingKey: string | null = null;
+  private pendingLoop: PendingTrack | null = null;
 
-  play(code: string, loop = false): void {
+  private timedAudio: HTMLAudioElement | null = null;
+  private timedKey: string | null = null;
+  private pendingTimed: PendingTrack | null = null;
+
+  private readonly unlockListeners = new Set<() => void>();
+
+  /** True until the browser allows audio playback or the user interacts once. */
+  readonly audioBlocked = signal(true);
+
+  /** Called on user gesture (click / keydown) to unlock and resume deferred tracks. */
+  unlock(): void {
+    this.audioBlocked.set(false);
+    if (this.pendingLoop) {
+      const p = this.pendingLoop;
+      this.pendingLoop = null;
+      const elapsed = p.baseOffsetSec + (Date.now() - p.recordedAt) / 1000;
+      this.startLoopAudio(p.code, p.key, elapsed);
+    }
+    if (this.pendingTimed) {
+      const p = this.pendingTimed;
+      this.pendingTimed = null;
+      const elapsed = p.baseOffsetSec + (Date.now() - p.recordedAt) / 1000;
+      if (p.durationMs === undefined || elapsed * 1000 < p.durationMs - 300) {
+        this.startTimedAudio(p.code, p.key, elapsed, p.durationMs);
+      }
+    }
+    for (const listener of [...this.unlockListeners]) listener();
+  }
+
+  /** Register a one-shot callback invoked when audio is unlocked (returns unsubscribe). */
+  onUnlock(cb: () => void): () => void {
+    this.unlockListeners.add(cb);
+    return () => this.unlockListeners.delete(cb);
+  }
+
+  play(code: string, loop = false, offsetSec = 0): void {
     const file = SFX_FILES[code];
     if (!file) return;
+    if (loop) {
+      this.startLoopAudio(code, `${code}:live`, offsetSec);
+      return;
+    }
     const audio = new Audio(file);
-    audio.loop = loop;
-    if (loop) this.loopingAudio = audio;
-    void audio.play();
+    this.playWithOffset(audio, offsetSec, false, () => {
+      this.audioBlocked.set(true);
+    });
+  }
+
+  /** Reconcile active looping and timed tracks against a server live-state snapshot. */
+  syncFromLiveState(snapshot: LiveStateSnapshot): void {
+    this.syncLoop(snapshot.activeLoopSfx, snapshot.serverTime);
+    this.syncTimed(snapshot.activeTimedSfx, snapshot.serverTime);
   }
 
   stopLoop(): void {
-    this.loopingAudio?.pause();
-    this.loopingAudio = null;
+    this.pendingLoop = null;
+    this.loopingKey = null;
+    if (this.loopingAudio) {
+      this.loopingAudio.pause();
+      this.loopingAudio = null;
+    }
+  }
+
+  stopTimed(): void {
+    this.pendingTimed = null;
+    this.timedKey = null;
+    if (this.timedAudio) {
+      this.timedAudio.pause();
+      this.timedAudio = null;
+    }
+  }
+
+  stopAll(): void {
+    this.stopLoop();
+    this.stopTimed();
+  }
+
+  private syncLoop(active: ActiveAudioState | null, serverTime: number): void {
+    if (!active) {
+      this.stopLoop();
+      return;
+    }
+    const key = `${active.code}:${active.startedAt}`;
+    if (this.loopingKey === key && this.loopingAudio && !this.loopingAudio.paused) return;
+    if (this.pendingLoop?.key === key) return;
+    const offsetSec = Math.max(0, (serverTime - active.startedAt) / 1000);
+    this.startLoopAudio(active.code, key, offsetSec);
+  }
+
+  private syncTimed(active: ActiveAudioState | null, serverTime: number): void {
+    if (!active) return;
+    const key = `${active.code}:${active.startedAt}`;
+    if (this.timedKey === key || this.pendingTimed?.key === key) return;
+    const offsetSec = Math.max(0, (serverTime - active.startedAt) / 1000);
+    if (active.durationMs !== undefined && offsetSec * 1000 >= active.durationMs - 300) return;
+    this.startTimedAudio(active.code, key, offsetSec, active.durationMs);
+  }
+
+  private startLoopAudio(code: string, key: string, offsetSec: number): void {
+    const file = SFX_FILES[code];
+    if (!file) return;
+    this.stopLoop();
+    const audio = new Audio(file);
+    audio.loop = true;
+    this.loopingAudio = audio;
+    this.loopingKey = key;
+    const recordedAt = Date.now();
+    this.playWithOffset(audio, offsetSec, true, () => {
+      if (this.loopingAudio !== audio) return;
+      this.audioBlocked.set(true);
+      this.pendingLoop = { code, loop: true, baseOffsetSec: offsetSec, recordedAt, key };
+    });
+  }
+
+  private startTimedAudio(code: string, key: string, offsetSec: number, durationMs?: number): void {
+    const file = SFX_FILES[code];
+    if (!file) return;
+    this.stopTimed();
+    const audio = new Audio(file);
+    this.timedAudio = audio;
+    this.timedKey = key;
+    const recordedAt = Date.now();
+    audio.addEventListener('ended', () => {
+      if (this.timedAudio === audio) {
+        this.timedAudio = null;
+      }
+    });
+    this.playWithOffset(audio, offsetSec, false, () => {
+      if (this.timedAudio !== audio) return;
+      this.audioBlocked.set(true);
+      this.pendingTimed = { code, loop: false, baseOffsetSec: offsetSec, recordedAt, durationMs, key };
+    });
+  }
+
+  private playWithOffset(
+    audio: HTMLAudioElement,
+    offsetSec: number,
+    loop: boolean,
+    onBlocked: () => void,
+  ): void {
+    const start = () => {
+      if (offsetSec > 0.15 && Number.isFinite(audio.duration) && audio.duration > 0) {
+        if (loop) {
+          audio.currentTime = offsetSec % audio.duration;
+        } else if (offsetSec >= audio.duration - 0.3) {
+          return;
+        } else {
+          audio.currentTime = offsetSec;
+        }
+      }
+      void audio.play().then(
+        () => this.audioBlocked.set(false),
+        () => onBlocked(),
+      );
+    };
+
+    if (offsetSec > 0.15 && audio.readyState < 1) {
+      audio.addEventListener('loadedmetadata', start, { once: true });
+      audio.load();
+    } else {
+      start();
+    }
   }
 }

@@ -101,7 +101,7 @@ export class AdminComponent {
     if (!this.session.createdRoomAdmin()) return [{ label: 'Quản trị', link: this.session.base() + '/admin/dashboard' }, { label: section }];
     return [
       ...(this.roomOwner() ? [{ label: 'Chủ phòng', link: '/host' }] : []),
-      { label: this.session.roomCode() ? 'Phòng ' + this.session.roomCode() : 'Phòng', link: this.session.base() + '/admin/dashboard' },
+      { label: this.session.match()?.matchName?.trim() || (this.session.roomCode() ? 'Phòng ' + this.session.roomCode() : 'Phòng'), link: this.session.base() + '/admin/dashboard' },
       { label: section },
     ];
   });

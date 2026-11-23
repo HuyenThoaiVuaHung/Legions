@@ -1,11 +1,9 @@
-<div class="flex justify-between">
-  <div class="">
-    <h6>
-      <strong>{{title}}</strong>
-    </h6>
-    <div>
-      {{description}}
-    </div>
+<div class="flex items-center justify-between gap-4">
+  <div class="flex flex-col gap-0.5">
+    <div class="mat-title-small">{{ title }}</div>
+    @if (description) {
+      <div class="mat-body-small opacity-70">{{ description }}</div>
+    }
   </div>
   <ng-content></ng-content>
 </div>

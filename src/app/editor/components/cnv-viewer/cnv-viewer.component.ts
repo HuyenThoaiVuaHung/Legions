@@ -1,22 +1,16 @@
-import { Component, Input, OnChanges, ChangeDetectionStrategy } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 @Component({
   selector: 'cnv-viewer',
   standalone: true,
-  changeDetection: ChangeDetectionStrategy.Eager,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [],
   templateUrl: './cnv-viewer.component.html',
-  styleUrl: './cnv-viewer.component.scss'
+  styleUrl: './cnv-viewer.component.scss',
 })
-export class CnvViewerComponent implements OnChanges {
-  @Input({required: true}) cnvMediaSrcs: string[] = [];
-  public valid : boolean = true;
-  constructor(){
-  }
-  ngOnChanges(){
-    if (this.cnvMediaSrcs.length !== 5) this.valid = false;
-    for (let src in this.cnvMediaSrcs){
-      if (src === '') this.valid = false;
-    }
-  }
+export class CnvViewerComponent {
+  readonly cnvMediaSrcs = input.required<readonly string[]>();
+  protected readonly layers = computed(() =>
+    this.cnvMediaSrcs().filter((src): src is string => typeof src === 'string' && src.length > 0),
+  );
 }

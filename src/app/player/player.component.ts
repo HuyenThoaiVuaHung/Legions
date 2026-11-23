@@ -1,12 +1,13 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { SessionService } from '../core/services/session.service';
+import { SfxService } from '../core/services/sfx.service';
 
 /**
  * Shell for every player/viewer screen. Browsers block audio autoplay until
  * the user interacts with the page at least once, so this shows a one-shot
- * overlay hint instead of the old code's self-rescheduling snackbar (which
- * kept re-showing itself every 5s via a setInterval closure bug even after
- * the audio had already been unlocked on a previous route).
+ * overlay hint and resumes any deferred/live looping or timed audio as soon
+ * as the user clicks or presses a key.
  */
 @Component({
   selector: 'app-player',
@@ -14,11 +15,26 @@ import { RouterOutlet } from '@angular/router';
   styleUrl: './player.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterOutlet],
+  host: {
+    '(window:keydown)': 'unlockAudio()',
+  },
 })
 export class PlayerComponent {
-  readonly audioBlocked = signal(true);
+  private readonly session = inject(SessionService);
+  protected readonly sfx = inject(SfxService);
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+    effect(() => {
+      const snapshot = this.session.liveState();
+      if (snapshot) this.sfx.syncFromLiveState(snapshot);
+    });
+    destroyRef.onDestroy(() => this.sfx.stopAll());
+  }
 
   unlockAudio(): void {
-    this.audioBlocked.set(false);
+    if (this.sfx.audioBlocked()) {
+      this.sfx.unlock();
+    }
   }
 }

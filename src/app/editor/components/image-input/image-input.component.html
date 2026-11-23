@@ -1,3 +1,13 @@
+@if (!src) {
+  <div (dragover)="dragOver($event)" (dragleave)="dragLeave($event)" (drop)="drop($event)">
+    <button type="button" class="new-card w-full flex-col px-4 py-5" [class.media-dragging]="dragging" [disabled]="disabled" (click)="handleImageInput()">
+      <span class="flex items-center gap-2">
+        <mat-icon>{{ allowVideo ? 'perm_media' : 'add_photo_alternate' }}</mat-icon>
+        {{ title || 'Thêm ảnh' }}
+      </span>
+    </button>
+  </div>
+} @else {
 <div class="w-min min-w-[15rem] max-h-[30rem]">
   <div
     [ngClass]="{
@@ -26,14 +36,13 @@
     <div
       class="w-full bg-theme bg-opacity-10 absolute grid gap-2 place-items-center top-0 left-0 transition-opacity rounded-xl h-full opacity-0 group-hover:opacity-100 cursor-pointer"
     >
-      <button mat-raised-button (click)="handleImageInput()">
+      <button mat-raised-button [disabled]="disabled" (click)="handleImageInput()">
         <mat-icon>upload_file</mat-icon>
         Tải ảnh mới
       </button>
     </div>
-    <img src="{{ src? src : '../../assets/misc/logo.png' }}" class="object-cover h-full w-max" />
+    <img [src]="src" class="object-contain h-full w-full" />
   </div>
-  <small class="error-text">
-    {{ error }}
-  </small>
 </div>
+}
+@if (error) { <small class="error-text" role="alert">{{ error }}</small> }

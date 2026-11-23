@@ -16,7 +16,7 @@ export const STORAGE_KEYS = {
 
 /** Where each match position sends a player/viewer. */
 export const PLAYER_ROUTE_BY_POSITION: Readonly<Record<MatchPosition, string>> = {
-  H: '/',
+  H: '/player/waiting',
   KD: '/player/kd',
   VCNV_Q: '/player/vcnv-q',
   VCNV_A: '/player/vcnv-a',

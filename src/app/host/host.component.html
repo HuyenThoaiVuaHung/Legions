@@ -1,12 +1,22 @@
 <div class="w-full h-screen box-border flex flex-col">
-  <app-navbar [trail]="trail">
-    <a mat-button routerLink="/editor"><mat-icon>edit_note</mat-icon>Trình biên tập</a>
-    <small class="opacity-70 mx-2">{{ store.profile()?.username }}</small>
+  <app-navbar [trail]="trail" [status]="ribbon.status()">
+    @if (ribbon.actions(); as actions) {
+      <ng-container [ngTemplateOutlet]="actions" />
+    } @else if (store.profile(); as profile) {
+    <small class="opacity-70 mx-2">{{ profile.username }}</small>
     <button mat-button (click)="store.logout()"><mat-icon>logout</mat-icon>Đăng xuất</button>
+    }
+    <ng-container navbarRibbon>
+      @if (ribbon.tools(); as tools) {
+        <ng-container [ngTemplateOutlet]="tools" />
+      }
+    </ng-container>
   </app-navbar>
 
-  <div class="flex-1 min-h-0 px-10 pb-10 box-border grid grid-rows-[minmax(0,1fr)] gap-10 grid-cols-1 2xl:grid-cols-[20rem_minmax(0,1fr)]">
-      <div class="hidden 2xl:flex min-h-0">
+  <div class="flex-1 min-h-0 px-3 sm:px-6 xl:px-10 pb-6 box-border grid grid-rows-[minmax(0,1fr)] gap-6 grid-cols-1"
+    [ngClass]="authoring ? '' : 'xl:grid-cols-[15rem_minmax(0,1fr)]'">
+      @if (!authoring) {
+      <div class="hidden xl:flex min-h-0">
         <mat-card class="w-full" appearance="raised">
           <mat-card-content class="!flex h-full flex-col">
             <h6><strong>Menu</strong></h6>
@@ -24,16 +34,19 @@
                 <mat-card-content class="!flex flex-col gap-2">
                   <mat-progress-bar mode="determinate" [value]="store.usage()"></mat-progress-bar>
                   <span class="mat-body-medium">{{ store.formatBytes(store.bank()?.usedBytes ?? 0) }} / {{ store.formatBytes(store.bank()?.maxBytes ?? 0) }}</span>
-                  <small class="text-xs opacity-70">{{ store.bank()?.items?.length ?? 0 }} / {{ store.bank()?.maxItems ?? 0 }} tệp</small>
+                  <small class="text-xs opacity-70">{{ store.bank()?.items?.length ?? 0 }} / {{ store.bank()?.maxItems ?? 0 }} bộ câu hỏi</small>
                 </mat-card-content>
               </mat-card>
             </div>
           </mat-card-content>
         </mat-card>
       </div>
+      }
 
-      <div class="min-w-0 min-h-0 overflow-y-auto relative 2xl:px-10 px-4 flex flex-col gap-5">
-        <nav class="flex gap-2 flex-wrap 2xl:hidden">
+      <div class="min-w-0 min-h-0 overflow-y-auto relative flex flex-col gap-5"
+        [ngClass]="ribbon.tools() ? '' : 'px-1 sm:px-4'">
+        @if (!authoring) {
+        <nav class="flex gap-2 flex-wrap xl:hidden">
           @for (item of menus; track item.nav) {
             <a routerLinkActive #rlb="routerLinkActive" [disabled]="rlb.isActive" [routerLink]="item.nav" mat-stroked-button>
               <mat-icon>{{ item.icon }}</mat-icon>
@@ -41,6 +54,7 @@
             </a>
           }
         </nav>
+        }
         @if (store.error()) { <small role="alert" class="text-[var(--mat-sys-error)]">{{ store.error() }}</small> }
         <router-outlet></router-outlet>
       </div>

@@ -1,0 +1,61 @@
+.vctrl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.vctrl-scrubber {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.vctrl-seek-slider {
+  flex: 1;
+  min-width: 160px;
+}
+
+.vctrl-time {
+  min-width: 40px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.vctrl-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.vctrl-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.vctrl-volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vctrl-slider {
+  width: 120px;
+}
+
+.vctrl-pct {
+  min-width: 36px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.vctrl-active {
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+}

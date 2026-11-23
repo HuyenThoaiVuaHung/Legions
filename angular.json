@@ -92,11 +92,7 @@
             "karmaConfig": "karma.conf.js",
             "inlineStyleLanguage": "scss",
             "assets": ["src/legion.ico", "src/assets"],
-            "styles": ["src/styles.scss"],
-            "scripts": [
-              "node_modules/video.js/dist/video.min.js",
-              "node_modules/socket.io-client/dist/socket.io.min.js"
-            ]
+            "styles": ["src/styles.scss"]
           }
         }
       }

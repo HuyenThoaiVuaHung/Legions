@@ -1,24 +1,268 @@
-<div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))] gap-5">
-  <input #picker type="file" class="file-input" accept=".legion,.lg" (change)="store.upload($event)" />
-  <button class="new-card" [disabled]="store.busy()" (click)="picker.click()">
-    <mat-icon>upload_file</mat-icon>
-    Tải lên tệp .legion
-  </button>
-  @for (item of store.bank()?.items ?? []; track item.id) {
-    <mat-card appearance="outlined" class="group">
-      <mat-card-content>
-        <h6>{{ item.name }}</h6>
-        <small class="text-xs opacity-70">{{ store.formatBytes(item.sizeBytes) }}</small>
+<section class="docs-browser">
+  @if (!galleryDismissed()) {
+    <mat-card appearance="outlined">
+      <mat-card-header class="gallery-header">
+        <mat-card-title>Bắt đầu bộ câu hỏi mới</mat-card-title>
+        <div class="gallery-header-actions">
+          <a mat-button routerLink="/host/drafts">
+            <mat-icon>cloud_off</mat-icon>Tệp ngoại tuyến
+          </a>
+          <button mat-icon-button type="button" matTooltip="Ẩn vĩnh viễn" aria-label="Ẩn mục tạo nhanh" (click)="dismissGallery()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      </mat-card-header>
+      <mat-card-content class="gallery-tiles">
+        <mat-card appearance="outlined" matRipple class="action-tile" tabindex="0" [attr.aria-disabled]="store.busy()"
+          (click)="!store.busy() && store.newSet()" (keydown.enter)="!store.busy() && store.newSet()">
+          <mat-card-content class="action-tile-body">
+            <mat-icon color="primary">add</mat-icon>
+            <span>Bộ câu hỏi trống</span>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card appearance="outlined" matRipple class="action-tile" tabindex="0" [attr.aria-disabled]="store.busy()"
+          (click)="!store.busy() && importLegion()" (keydown.enter)="!store.busy() && importLegion()">
+          <mat-card-content class="action-tile-body">
+            <mat-icon>folder_zip</mat-icon>
+            <span>Nhập tệp .legion</span>
+          </mat-card-content>
+        </mat-card>
+
+        <mat-card appearance="outlined" matRipple class="action-tile" tabindex="0" [attr.aria-disabled]="store.busy()"
+          (click)="!store.busy() && importExcel()" (keydown.enter)="!store.busy() && importExcel()">
+          <mat-card-content class="action-tile-body">
+            <mat-icon>table_view</mat-icon>
+            <span>Nhập Excel (.xlsx)</span>
+          </mat-card-content>
+        </mat-card>
       </mat-card-content>
-      <div class="w-full h-full !absolute top-0 left-0 flex justify-end items-end box-border p-2 gap-1 rounded-xl opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-        <button mat-icon-button matTooltip="Tải xuống" (click)="store.download(item)"><mat-icon>file_download</mat-icon></button>
-        <button mat-icon-button matTooltip="Đổi tên" (click)="store.rename(item)"><mat-icon>edit</mat-icon></button>
-        <button mat-icon-button matTooltip="Xoá" (click)="store.remove(item)"><mat-icon>delete</mat-icon></button>
-        <button mat-raised-button [disabled]="store.busy()" (click)="store.create(item.id)">
-          <mat-icon>add</mat-icon>
-          Tạo phòng
-        </button>
-      </div>
     </mat-card>
   }
-</div>
+
+  <section class="docs-recent" aria-label="Danh sách bộ câu hỏi">
+    <div class="docs-header-row">
+      <h2 class="mat-title-large !m-0">{{ galleryDismissed() ? 'Bộ câu hỏi' : 'Bộ câu hỏi gần đây' }}</h2>
+      @if (galleryDismissed()) {
+        <div class="docs-header-actions">
+          <a mat-button routerLink="/host/drafts"><mat-icon>cloud_off</mat-icon>Tệp ngoại tuyến</a>
+          <button mat-stroked-button [disabled]="store.busy()" [matMenuTriggerFor]="quickImportMenu"><mat-icon>upload_file</mat-icon>Nhập</button>
+          <mat-menu #quickImportMenu="matMenu">
+            <button mat-menu-item (click)="importLegion()"><mat-icon>folder_zip</mat-icon>Tệp .legion (.legion, .lg)</button>
+            <button mat-menu-item (click)="importExcel()"><mat-icon>table_view</mat-icon>Bảng tính Excel (.xlsx)</button>
+          </mat-menu>
+          <button mat-flat-button [disabled]="store.busy()" (click)="store.newSet()"><mat-icon>add</mat-icon>Tạo mới</button>
+        </div>
+      }
+    </div>
+
+    <div class="docs-filter-row">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="docs-search">
+        <mat-icon matPrefix>search</mat-icon>
+        <input matInput [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="Tìm bộ câu hỏi…" aria-label="Tìm bộ câu hỏi" />
+        @if (query()) {
+          <button mat-icon-button matSuffix type="button" aria-label="Xóa tìm kiếm" (click)="query.set('')">
+            <mat-icon>close</mat-icon>
+          </button>
+        }
+      </mat-form-field>
+
+      <div class="docs-filter-actions">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="docs-select">
+          <mat-select [ngModel]="ownerFilter()" (ngModelChange)="ownerFilter.set($event)" aria-label="Lọc theo quyền sở hữu">
+            <mat-option value="all">Tất cả</mat-option>
+            <mat-option value="owner">Của bạn</mat-option>
+            <mat-option value="shared">Được chia sẻ</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <button mat-icon-button type="button" matTooltip="Sắp xếp" aria-label="Sắp xếp" [matMenuTriggerFor]="sortMenu">
+          <mat-icon>sort</mat-icon>
+        </button>
+        <mat-menu #sortMenu="matMenu">
+          <button mat-menu-item (click)="sortBy.set('updated')">
+            <mat-icon>{{ sortBy() === 'updated' ? 'check' : 'schedule' }}</mat-icon>Cập nhật gần nhất
+          </button>
+          <button mat-menu-item (click)="sortBy.set('name')">
+            <mat-icon>{{ sortBy() === 'name' ? 'check' : 'sort_by_alpha' }}</mat-icon>Tên A → Z
+          </button>
+          <button mat-menu-item (click)="sortBy.set('size')">
+            <mat-icon>{{ sortBy() === 'size' ? 'check' : 'storage' }}</mat-icon>Dung lượng lớn nhất
+          </button>
+        </mat-menu>
+
+        <mat-button-toggle-group [value]="viewMode()" (change)="setViewMode($event.value)" aria-label="Chế độ hiển thị" hideSingleSelectionIndicator>
+          <mat-button-toggle value="grid" matTooltip="Dạng lưới" aria-label="Dạng lưới">
+            <mat-icon>grid_view</mat-icon>
+          </mat-button-toggle>
+          <mat-button-toggle value="list" matTooltip="Dạng danh sách" aria-label="Dạng danh sách">
+            <mat-icon>view_list</mat-icon>
+          </mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
+    </div>
+
+    @if (store.bank(); as bank) {
+      @if (filteredItems().length === 0) {
+        @if (bank.items.length === 0) {
+          <app-empty-state icon="inventory_2" title="Chưa có bộ câu hỏi nào"
+            hint="Tạo bộ mới hoặc nhập từ tệp .legion, Excel để bắt đầu. Các bộ được chia sẻ với bạn cũng sẽ hiển thị tại đây.">
+            @if (galleryDismissed()) {
+              <button mat-flat-button [disabled]="store.busy()" (click)="store.newSet()"><mat-icon>add</mat-icon>Tạo mới</button>
+            }
+          </app-empty-state>
+        } @else {
+          <app-empty-state icon="search_off" title="Không tìm thấy bộ câu hỏi phù hợp"
+            hint="Thử đổi từ khóa tìm kiếm hoặc bộ lọc quyền sở hữu.">
+            <button mat-stroked-button (click)="resetFilters()">Xóa bộ lọc</button>
+          </app-empty-state>
+        }
+      } @else if (viewMode() === 'grid') {
+        <div class="docs-grid">
+          @for (item of filteredItems(); track item.id) {
+            <mat-card appearance="outlined" matRipple class="doc-card" tabindex="0" (click)="openItem(item)" (keydown.enter)="openItem(item)">
+              <div class="doc-card-preview">
+                <div class="doc-sheet" aria-hidden="true">
+                  <div class="doc-sheet-bar"></div>
+                  <div class="doc-sheet-line w-3/4"></div>
+                  <div class="doc-sheet-line w-1/2"></div>
+                  <div class="doc-sheet-line w-5/6"></div>
+                  <div class="doc-sheet-line w-2/3"></div>
+                </div>
+                <span class="doc-size-badge">{{ store.formatBytes(item.sizeBytes) }}</span>
+              </div>
+              <mat-divider />
+              <div class="doc-card-footer">
+                <div class="doc-card-info">
+                  <div class="doc-card-title" [title]="item.name">{{ item.name }}</div>
+                  <div class="doc-card-sub">
+                    <mat-icon aria-hidden="true">{{ item.access === 'owner' ? 'description' : 'group' }}</mat-icon>
+                    <span class="truncate">{{ accessLabel(item.access) }} · {{ formatShortDate(item.updatedAt) }}</span>
+                  </div>
+                </div>
+                <button mat-icon-button type="button" aria-label="Tùy chọn" [disabled]="store.busy()"
+                  [matMenuTriggerFor]="cardMenu" (click)="$event.stopPropagation()">
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+                <mat-menu #cardMenu="matMenu">
+                  <a mat-menu-item [routerLink]="['/host/bank', item.id]">
+                    <mat-icon>{{ item.access === 'viewer' ? 'visibility' : 'edit' }}</mat-icon>{{ item.access === 'viewer' ? 'Mở để xem' : 'Mở trình biên tập' }}
+                  </a>
+                  @if (item.access !== 'viewer') {
+                    <button mat-menu-item (click)="store.create(item.id)">
+                      <mat-icon>meeting_room</mat-icon>Tạo phòng từ bộ này
+                    </button>
+                  }
+                  <button mat-menu-item (click)="shareItem(item)">
+                    <mat-icon>group</mat-icon>Chia sẻ
+                  </button>
+                  <button mat-menu-item (click)="copyShareLink(item)">
+                    <mat-icon>link</mat-icon>Sao chép liên kết
+                  </button>
+                  <button mat-menu-item [matMenuTriggerFor]="exportMenu">
+                    <mat-icon>download</mat-icon>Tải xuống
+                  </button>
+                  @if (item.access === 'owner') {
+                    <mat-divider />
+                    <button mat-menu-item (click)="store.rename(item)">
+                      <mat-icon>drive_file_rename_outline</mat-icon>Đổi tên
+                    </button>
+                    <button mat-menu-item (click)="store.remove(item)">
+                      <mat-icon>delete</mat-icon>Xóa bộ câu hỏi
+                    </button>
+                  }
+                </mat-menu>
+                <mat-menu #exportMenu="matMenu">
+                  <button mat-menu-item (click)="store.exportLegion(item)"><mat-icon>folder_zip</mat-icon>Tệp .legion (.legion)</button>
+                  <button mat-menu-item (click)="store.exportExcel(item)"><mat-icon>table_view</mat-icon>Bảng tính Excel (.xlsx)</button>
+                  <button mat-menu-item (click)="store.download(item)"><mat-icon>code</mat-icon>Dữ liệu JSON (.json)</button>
+                </mat-menu>
+              </div>
+            </mat-card>
+          }
+        </div>
+      } @else {
+        <mat-card appearance="outlined" class="docs-table-card">
+          <table mat-table [dataSource]="filteredItems()" class="docs-table">
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>Tên</th>
+              <td mat-cell *matCellDef="let item">
+                <div class="docs-table-name">
+                  <mat-icon color="primary" aria-hidden="true">{{ item.access === 'owner' ? 'description' : 'group' }}</mat-icon>
+                  <span class="truncate" [title]="item.name">{{ item.name }}</span>
+                </div>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="access">
+              <th mat-header-cell *matHeaderCellDef>Quyền sở hữu</th>
+              <td mat-cell *matCellDef="let item" class="opacity-75">{{ accessLabel(item.access) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="size">
+              <th mat-header-cell *matHeaderCellDef>Dung lượng</th>
+              <td mat-cell *matCellDef="let item" class="opacity-75">{{ store.formatBytes(item.sizeBytes) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="updatedAt">
+              <th mat-header-cell *matHeaderCellDef>Cập nhật</th>
+              <td mat-cell *matCellDef="let item" class="opacity-75">{{ store.date(item.updatedAt) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef></th>
+              <td mat-cell *matCellDef="let item" class="docs-table-actions">
+                @if (item.access !== 'viewer') {
+                  <button mat-icon-button type="button" matTooltip="Tạo phòng" aria-label="Tạo phòng" [disabled]="store.busy()"
+                    (click)="$event.stopPropagation(); store.create(item.id)">
+                    <mat-icon>meeting_room</mat-icon>
+                  </button>
+                }
+                <button mat-icon-button type="button" matTooltip="Chia sẻ" aria-label="Chia sẻ" [disabled]="store.busy()"
+                  (click)="$event.stopPropagation(); shareItem(item)">
+                  <mat-icon>group</mat-icon>
+                </button>
+                <button mat-icon-button type="button" aria-label="Tùy chọn" [disabled]="store.busy()"
+                  [matMenuTriggerFor]="rowMenu" (click)="$event.stopPropagation()">
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+                <mat-menu #rowMenu="matMenu">
+                  <a mat-menu-item [routerLink]="['/host/bank', item.id]">
+                    <mat-icon>{{ item.access === 'viewer' ? 'visibility' : 'edit' }}</mat-icon>{{ item.access === 'viewer' ? 'Mở để xem' : 'Mở trình biên tập' }}
+                  </a>
+                  <button mat-menu-item (click)="copyShareLink(item)">
+                    <mat-icon>link</mat-icon>Sao chép liên kết
+                  </button>
+                  <button mat-menu-item [matMenuTriggerFor]="rowExportMenu">
+                    <mat-icon>download</mat-icon>Tải xuống
+                  </button>
+                  @if (item.access === 'owner') {
+                    <mat-divider />
+                    <button mat-menu-item (click)="store.rename(item)">
+                      <mat-icon>drive_file_rename_outline</mat-icon>Đổi tên
+                    </button>
+                    <button mat-menu-item (click)="store.remove(item)">
+                      <mat-icon>delete</mat-icon>Xóa bộ câu hỏi
+                    </button>
+                  }
+                </mat-menu>
+                <mat-menu #rowExportMenu="matMenu">
+                  <button mat-menu-item (click)="store.exportLegion(item)"><mat-icon>folder_zip</mat-icon>Tệp .legion (.legion)</button>
+                  <button mat-menu-item (click)="store.exportExcel(item)"><mat-icon>table_view</mat-icon>Bảng tính Excel (.xlsx)</button>
+                  <button mat-menu-item (click)="store.download(item)"><mat-icon>code</mat-icon>Dữ liệu JSON (.json)</button>
+                </mat-menu>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="docs-table-row" (click)="openItem(row)"></tr>
+          </table>
+        </mat-card>
+      }
+    } @else if (store.error()) {
+      <button mat-stroked-button class="self-start" (click)="store.refresh()">Tải lại</button>
+    } @else {
+      <p role="status" class="opacity-70">Đang tải danh sách…</p>
+    }
+  </section>
+</section>

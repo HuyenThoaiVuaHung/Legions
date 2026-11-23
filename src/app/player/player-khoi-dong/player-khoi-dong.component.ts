@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { MatFabButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { ApiService } from '../../core/services/api.service';
 import { MediaService } from '../../core/services/media.service';
@@ -22,7 +24,10 @@ import { PlayerListComponent } from '../../components/player-list/player-list.co
   templateUrl: './player-khoi-dong.component.html',
   styleUrl: './player-khoi-dong.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatProgressBar, PlayerListComponent, MatFabButton],
+  imports: [NgTemplateOutlet, MatProgressBar, MatIcon, PlayerListComponent, MatFabButton],
+  host: {
+    '(window:keydown)': 'onKeyDown($event)',
+  },
 })
 export class PlayerKhoiDongComponent {
   private readonly api = inject(ApiService);
@@ -41,33 +46,84 @@ export class PlayerKhoiDongComponent {
   protected readonly timerBuzz = signal(0);
   protected readonly timerAnswer = signal(0);
 
+  protected readonly isPlayer = computed(() => this.session.role() === Role.Player);
+  protected readonly isMultiplayer = computed(() => this.round()?.gamemode === 'M');
+  protected readonly modeLabel = computed(() => (this.isMultiplayer() ? 'Đối kháng' : 'Cá nhân'));
+
   protected readonly imageUrl = computed(() => {
     const q = this.question();
     if (!q || q.type !== 'P') return null;
     return this.media.resolve('kd', q.mediaFile);
   });
 
+  protected readonly isAudioQuestion = computed(() => this.question()?.type === 'A');
+
   protected readonly gotTurn = computed(
     () => this.turnIndex() !== -1 && this.turnIndex() === this.session.playerIndex(),
   );
 
-  /** Question count within the current player's turn, derived locally from event order. */
+  /** Question count within the current turn, synced from server events with safe fallback. */
   protected readonly questionNo = signal(0);
+  private readonly serverMaxQuestionNo = signal(0);
   protected readonly maxQuestionNo = computed(() => {
+    const fromServer = this.serverMaxQuestionNo();
+    if (fromServer > 0) return fromServer;
     const round = this.round();
-    if (!round) return 0;
+    if (!round?.questions) return 0;
     return round.gamemode === 'M'
-      ? round.questions.multiplayer.length
-      : (round.questions.singleplayer[round.activePlayerIndex]?.length ?? 0);
+      ? (round.questions.multiplayer?.length ?? 0)
+      : (round.questions.singleplayer?.[round.activePlayerIndex]?.length ?? 0);
+  });
+
+  protected readonly activeTimer = computed<{ seconds: string; label: string; urgent: boolean } | null>(() => {
+    const answer = this.timerAnswer();
+    if (answer > 0) {
+      return { seconds: (answer / 10).toFixed(1), label: 'Trả lời', urgent: answer <= 10 };
+    }
+    const buzz = this.timerBuzz();
+    if (buzz > 0) {
+      return {
+        seconds: (buzz / 10).toFixed(1),
+        label: this.isMultiplayer() ? 'Bấm chuông' : 'Suy nghĩ',
+        urgent: buzz <= 10,
+      };
+    }
+    return null;
   });
 
   private turnKey: string | null = null;
   private audio: HTMLAudioElement | null = null;
+  private audioFile: string | null = null;
+  private pendingAudioFile: string | null = null;
 
   constructor() {
     void this.loadRound();
+    this.network.emit('request-live-state');
+
+    effect(() => {
+      const snapshot = this.session.liveState();
+      if (!snapshot) return;
+      const kd = snapshot.kd;
+      this.serverMaxQuestionNo.set(kd.maxQuestionCount);
+      if (kd.currentQuestionNo > 0 || kd.question) {
+        this.questionNo.set(kd.currentQuestionNo > 0 ? kd.currentQuestionNo : (kd.question ? 1 : 0));
+      }
+      this.turnIndex.set(kd.turnPlayerIndex);
+      this.answerButtonDisabled.set(!kd.buzzerOpen);
+      this.previousAnswer.set(kd.previousAnswer);
+      this.timerAnswer.set(kd.decisionTimerOwner === 'player' ? kd.decisionRemaining : 0);
+      this.timerBuzz.set(kd.decisionTimerOwner === 'admin' ? kd.decisionRemaining : 0);
+      this.applyQuestion(kd.question);
+    });
 
     const offs = [
+      this.sfx.onUnlock(() => {
+        if (this.pendingAudioFile) {
+          const file = this.pendingAudioFile;
+          this.pendingAudioFile = null;
+          this.startQuestionAudio(file);
+        }
+      }),
       this.network.on<[string, boolean?]>('play-sfx', (code, loop) => this.sfx.play(code, loop)),
       this.network.on<[KdQuestion]>('update-kd-question', (data) => this.onQuestion(data)),
       this.network.on<[number]>('player-got-turn-kd', (playerIndex) => this.turnIndex.set(playerIndex)),
@@ -79,24 +135,66 @@ export class PlayerKhoiDongComponent {
         if (isPlayerTimer) this.timerAnswer.set(time);
         else this.timerBuzz.set(time);
       }),
+      this.network.on<[Partial<KdRound>]>('update-kd-data', (data) => {
+        if (data) this.round.set(data as KdRound);
+      }),
+      this.network.on<[number, number]>('update-number-question-kd', (maxCount, currentNo) => {
+        this.serverMaxQuestionNo.set(maxCount);
+        if (currentNo > 0) this.questionNo.set(currentNo);
+      }),
+      this.network.on<[number]>('update-questions-number-kd', (questionCount) => {
+        this.serverMaxQuestionNo.set(questionCount);
+        this.questionNo.set(0);
+      }),
     ];
-    this.destroyRef.onDestroy(() => offs.forEach((off) => off()));
+    this.destroyRef.onDestroy(() => {
+      offs.forEach((off) => off());
+      this.stopQuestionAudio();
+    });
   }
 
   private async loadRound(): Promise<void> {
     this.round.set(await this.api.getRound('kd'));
   }
 
-  private onQuestion(data: KdQuestion): void {
-    this.previousAnswer.set(this.question()?.answer ?? null);
+  private applyQuestion(data: KdQuestion | null): void {
     this.question.set(data);
-    this.turnIndex.set(-1);
+    if (!data || data.type !== 'A' || !data.mediaFile) {
+      this.stopQuestionAudio();
+      return;
+    }
+    if (this.audioFile === data.mediaFile) return;
+    this.startQuestionAudio(data.mediaFile);
+  }
+
+  private startQuestionAudio(mediaFile: string): void {
+    this.stopQuestionAudio();
+    this.audioFile = mediaFile;
+    const audio = new Audio(this.media.resolve('kd', mediaFile));
+    this.audio = audio;
+    void audio.play().catch(() => {
+      if (this.audio === audio) this.pendingAudioFile = mediaFile;
+    });
+  }
+
+  private stopQuestionAudio(): void {
     this.audio?.pause();
     this.audio = null;
-    if (data.type === 'A') {
-      this.audio = new Audio(this.media.resolve('kd', data.mediaFile));
-      void this.audio.play();
+    this.audioFile = null;
+    this.pendingAudioFile = null;
+  }
+
+  private onQuestion(data: Partial<KdQuestion> | null): void {
+    this.previousAnswer.set(this.question()?.answer || this.previousAnswer());
+    if (!data || typeof data.question !== 'string') {
+      this.question.set(null);
+      this.turnIndex.set(-1);
+      this.stopQuestionAudio();
+      return;
     }
+    const q = data as KdQuestion;
+    this.turnIndex.set(-1);
+    this.applyQuestion(q);
 
     const round = this.round();
     const key = round ? `${round.gamemode}:${round.activePlayerIndex}` : null;
@@ -110,6 +208,18 @@ export class PlayerKhoiDongComponent {
   }
 
   getAnswerTurn(): void {
+    if (!this.isPlayer() || !this.isMultiplayer() || this.answerButtonDisabled()) return;
     this.network.emit('get-turn-kd');
+  }
+
+  protected onKeyDown(event: KeyboardEvent): void {
+    if (event.code !== 'Space' || event.repeat) return;
+    if (!this.isPlayer() || !this.isMultiplayer() || this.answerButtonDisabled()) return;
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
+    event.preventDefault();
+    this.getAnswerTurn();
   }
 }

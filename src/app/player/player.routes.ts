@@ -67,6 +67,13 @@ export const PLAYER_ROUTES: Routes = [
             (m) => m.PointsViewComponent,
           ),
       },
+      {
+        path: 'waiting',
+        loadComponent: () =>
+          import('./player-waiting/player-waiting.component').then(
+            (m) => m.PlayerWaitingComponent,
+          ),
+      },
     ],
   },
 ];

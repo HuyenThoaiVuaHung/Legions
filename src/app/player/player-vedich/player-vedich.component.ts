@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatFabButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
@@ -11,6 +11,7 @@ import { SessionService } from '../../core/services/session.service';
 import { SfxService } from '../../core/services/sfx.service';
 import { CountdownComponent } from '../../components/countdown/countdown.component';
 import { PlayerListComponent } from '../../components/player-list/player-list.component';
+import { StageVideoPlayerComponent } from '../../components/stage-video-player/stage-video-player.component';
 
 /** VD's 6 question slots are always laid out as two rows: 20 điểm, 30 điểm. */
 const QUESTION_PICKER_ROWS = [
@@ -23,7 +24,14 @@ const QUESTION_PICKER_ROWS = [
   templateUrl: './player-vedich.component.html',
   styleUrl: './player-vedich.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CountdownComponent, PlayerListComponent, MatFabButton, MatCheckbox, FormsModule],
+  imports: [
+    CountdownComponent,
+    PlayerListComponent,
+    StageVideoPlayerComponent,
+    MatFabButton,
+    MatCheckbox,
+    FormsModule,
+  ],
 })
 export class PlayerVedichComponent {
   private readonly api = inject(ApiService);
@@ -47,23 +55,46 @@ export class PlayerVedichComponent {
   protected readonly imageUrl = signal<string | null>(null);
 
   private audio: HTMLAudioElement | null = null;
+  private audioFile: string | null = null;
+  private pendingAudioFile: string | null = null;
 
   constructor() {
     void this.loadRound();
+    this.network.emit('request-live-state');
+
+    effect(() => {
+      const snapshot = this.session.liveState();
+      if (!snapshot) return;
+      this.currentTime.set(snapshot.clock.remaining);
+      if (snapshot.clock.maxSeconds > 0) this.maxTime.set(snapshot.clock.maxSeconds);
+      this.stealingPlayerIndex.set(snapshot.vd.stealingPlayerIndex);
+      this.buttonDisabled.set(!snapshot.vd.stealWindowOpen);
+      this.fiveSecTimer.set(snapshot.vd.stealRemaining);
+      this.onQuestion(snapshot.vd.question);
+    });
 
     const offs = [
+      this.sfx.onUnlock(() => {
+        if (this.pendingAudioFile) {
+          const file = this.pendingAudioFile;
+          this.pendingAudioFile = null;
+          this.startQuestionAudio(file);
+        }
+      }),
       this.network.on<[string]>('play-sfx', (code) => this.sfx.play(code)),
       this.network.on<[VdRound]>('update-vedich-data', (data) => this.round.set(data)),
       this.network.on<[VdQuestion | undefined]>('update-vedich-question', (q) => this.onQuestion(q ?? null)),
       this.network.on<[number]>('update-clock', (clock) => this.onClock(clock)),
-      this.network.on<[]>('vd-play-video', () => this.toggleVideoPlay()),
       this.network.on<[]>('unlock-button-vd', () => this.buttonDisabled.set(false)),
       this.network.on<[]>('lock-button-vd', () => this.buttonDisabled.set(true)),
       this.network.on<[number]>('update-5s-countdown-vd', (counter) => this.fiveSecTimer.set(counter)),
       this.network.on<[number]>('player-steal-question', (playerIndex) => this.stealingPlayerIndex.set(playerIndex)),
       this.network.on<[]>('clear-stealing-player', () => this.stealingPlayerIndex.set(-1)),
     ];
-    this.destroyRef.onDestroy(() => offs.forEach((off) => off()));
+    this.destroyRef.onDestroy(() => {
+      offs.forEach((off) => off());
+      this.stopQuestionAudio();
+    });
   }
 
   private async loadRound(): Promise<void> {
@@ -72,33 +103,49 @@ export class PlayerVedichComponent {
 
   private onQuestion(question: VdQuestion | null): void {
     this.currentQuestion.set(question);
-    this.audio?.pause();
-    this.audio = null;
     this.videoUrl.set(null);
     this.imageUrl.set(null);
-    if (!question) return;
+    if (!question) {
+      this.stopQuestionAudio();
+      return;
+    }
 
     if (question.type === 'V') {
+      this.stopQuestionAudio();
       this.videoUrl.set(this.media.resolve('vd', question.mediaFile));
-    } else if (question.type === 'A') {
-      this.audio = new Audio(this.media.resolve('vd', question.mediaFile));
-      this.audio.load();
-      void this.audio.play();
+    } else if (question.type === 'A' && question.mediaFile) {
+      if (this.audioFile !== question.mediaFile) {
+        this.startQuestionAudio(question.mediaFile);
+      }
     } else if (question.type === 'I') {
+      this.stopQuestionAudio();
       this.imageUrl.set(this.media.resolve('vd', question.mediaFile));
+    } else {
+      this.stopQuestionAudio();
     }
+  }
+
+  private startQuestionAudio(file: string): void {
+    this.stopQuestionAudio();
+    this.audioFile = file;
+    const audio = new Audio(this.media.resolve('vd', file));
+    this.audio = audio;
+    audio.load();
+    void audio.play().catch(() => {
+      if (this.audio === audio) this.pendingAudioFile = file;
+    });
+  }
+
+  private stopQuestionAudio(): void {
+    this.audio?.pause();
+    this.audio = null;
+    this.audioFile = null;
+    this.pendingAudioFile = null;
   }
 
   private onClock(clock: number): void {
     if (this.currentTime() === 0) this.maxTime.set(clock);
     this.currentTime.set(clock);
-  }
-
-  private toggleVideoPlay(): void {
-    const video = document.getElementById('vedich-video') as HTMLVideoElement | null;
-    if (!video) return;
-    if (video.paused) void video.play();
-    else video.pause();
   }
 
   stealQuestion(): void {

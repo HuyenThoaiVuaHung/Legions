@@ -1,0 +1,91 @@
+<div class="set-workspace">
+  @if (editor.set(); as set) {
+    <ng-template #ribbonActions>
+        <button mat-flat-button class="ribbon-button" aria-label="Chia sẻ" (click)="openSharing()"><mat-icon>group</mat-icon><span>Chia sẻ</span></button>
+    </ng-template>
+  }
+  @if (editor.error() || editor.recoverable() && !editor.active()) {
+    <div class="editor-notice">
+      @if (editor.error()) { <span role="alert">{{ editor.error() }}</span> }
+      @if (editor.recoverable() && !editor.active()) {
+        <button mat-button [disabled]="!editor.canEdit()" (click)="editor.recover()">Khôi phục thay đổi</button>
+      }
+    </div>
+  }
+  <mat-tab-nav-panel #roundPanel class="round-content">
+    @if (editor.set()) {
+      <router-outlet />
+    } @else {
+      @switch (entryState()) {
+        @case ('signIn') {
+          <app-empty-state icon="lock_outline" title="Đăng nhập để mở bộ câu hỏi">
+            <button mat-flat-button (click)="openEditor(true)">Đăng nhập</button>
+          </app-empty-state>
+        }
+        @case ('denied') {
+          <app-empty-state icon="lock_outline" title="Bạn chưa có quyền truy cập"
+            hint="Hãy yêu cầu chủ sở hữu chia sẻ với bạn hoặc dùng tài khoản đã được cấp quyền.">
+            <button mat-stroked-button (click)="openEditor(true)">Đổi tài khoản</button>
+          </app-empty-state>
+        }
+        @default {
+          <p role="status">Đang mở bộ câu hỏi…</p>
+        }
+      }
+    }
+  </mat-tab-nav-panel>
+</div>
+<ng-template #ribbonTools>
+  <div class="editor-ribbon">
+    @if (editor.set(); as set) {
+      <mat-toolbar class="editor-menubar" role="menubar" aria-label="Thanh công cụ">
+        <button mat-button [disabled]="fileBusy() || hostBusy()" [matMenuTriggerFor]="fileMenu">Tệp</button>
+        <button mat-button [disabled]="hostBusy()" [matMenuTriggerFor]="shareMenu">Chia sẻ</button>
+        <button mat-button [disabled]="hostBusy()" [matMenuTriggerFor]="roomMenu">Phòng</button>
+      </mat-toolbar>
+      <mat-menu #fileMenu="matMenu">
+        <button mat-menu-item (click)="newSet()"><mat-icon>note_add</mat-icon>Mới</button>
+        <button mat-menu-item [matMenuTriggerFor]="openMenu"><mat-icon>folder_open</mat-icon>Mở</button>
+        @if (set.item.access === 'owner') {
+          <button mat-menu-item [matMenuTriggerFor]="overrideMenu"><mat-icon>upload_file</mat-icon>Ghi đè</button>
+        }
+        <mat-divider />
+        <button mat-menu-item [matMenuTriggerFor]="downloadMenu"><mat-icon>download</mat-icon>Tải xuống</button>
+        @if (set.item.access === 'owner') {
+          <button mat-menu-item (click)="renameSet()"><mat-icon>drive_file_rename_outline</mat-icon>Đổi tên</button>
+        }
+      </mat-menu>
+      <mat-menu #openMenu="matMenu">
+        <a mat-menu-item routerLink="/host/bank"><mat-icon>inventory_2</mat-icon>Từ ngân hàng câu hỏi</a>
+        <mat-divider />
+        <button mat-menu-item (click)="importFile('legion', false)"><mat-icon>folder_zip</mat-icon>Tệp .legion (.legion, .lg)</button>
+        <button mat-menu-item (click)="importFile('excel', false)"><mat-icon>table_view</mat-icon>Bảng tính Excel (.xlsx)</button>
+      </mat-menu>
+      <mat-menu #overrideMenu="matMenu">
+        <button mat-menu-item (click)="importFile('legion', true)"><mat-icon>folder_zip</mat-icon>Bằng tệp .legion (.legion, .lg)</button>
+        <button mat-menu-item (click)="importFile('excel', true)"><mat-icon>table_view</mat-icon>Bằng bảng tính Excel (.xlsx)</button>
+      </mat-menu>
+      <mat-menu #downloadMenu="matMenu">
+        <button mat-menu-item (click)="exportSet('legion')"><mat-icon>folder_zip</mat-icon>Tệp .legion (.legion)</button>
+        <button mat-menu-item (click)="exportSet('excel')"><mat-icon>table_view</mat-icon>Bảng tính Excel (.xlsx)</button>
+        <button mat-menu-item (click)="exportSet('json')"><mat-icon>code</mat-icon>Dữ liệu JSON (.json)</button>
+      </mat-menu>
+      <mat-menu #shareMenu="matMenu">
+        <button mat-menu-item (click)="openSharing()"><mat-icon>group</mat-icon>Quản lý quyền truy cập</button>
+        <button mat-menu-item (click)="copyShareLink(true)"><mat-icon>link</mat-icon>Sao chép liên kết</button>
+      </mat-menu>
+      <mat-menu #roomMenu="matMenu">
+        @if (set.item.access !== 'viewer') {
+          <button mat-menu-item [disabled]="!editor.online() || editor.saving() || hostBusy()" (click)="createRoom()"><mat-icon>meeting_room</mat-icon>Tạo phòng từ bộ này</button>
+        }
+        <a mat-menu-item routerLink="/host/rooms"><mat-icon>list_alt</mat-icon>Danh sách phòng</a>
+      </mat-menu>
+    }
+    <nav mat-tab-nav-bar class="editor-tabs" [mat-stretch-tabs]="false" [tabPanel]="roundPanel" aria-label="Phần thi">
+      @for (section of sections; track section.path) {
+        <a mat-tab-link [routerLink]="section.path" routerLinkActive #current="routerLinkActive"
+          [active]="current.isActive" [disabled]="!editor.set()">{{ section.label }}</a>
+      }
+    </nav>
+  </div>
+</ng-template>

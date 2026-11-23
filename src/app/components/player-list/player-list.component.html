@@ -1,16 +1,24 @@
 <div
-  class="disablePointerActions w-64 overflow-hidden p-1 text-center gap-3 items-center flex flex-col"
+  class="disablePointerActions overflow-hidden p-1 gap-2.5"
+  [class.w-64]="layout() === 'vertical'"
+  [class.flex]="layout() === 'vertical'"
+  [class.flex-col]="layout() === 'vertical'"
+  [class.player-list-bar]="layout() === 'horizontal'"
 >
   @for (player of players(); track $index) {
-  <div
-    [class.name-highlight]="highlightIndex() === $index"
-    [class.special-highlight]="turnIndex() === $index"
-    class="mat-h2 w-full bg-names rounded-md flex leading-tight justify-between py-3 px-3 box-border text-left shadow-lg"
-  >
-    <span>
-      {{ player.name }}
-    </span>
-    <span class="grid place-items-center text-right">{{ player.score }}</span>
-  </div>
+    <div
+      [class.name-highlight]="highlightIndex() === $index"
+      [class.special-highlight]="turnIndex() === $index"
+      [class.self-seat]="selfIndex() === $index"
+      class="w-full bg-names rounded-md flex items-center justify-between gap-2 py-2.5 px-3 box-border text-left shadow-md min-w-0"
+    >
+      <span class="flex items-center gap-1.5 min-w-0">
+        <span class="truncate text-base font-medium leading-tight">{{ player.name }}</span>
+        @if (selfIndex() === $index) {
+          <span class="self-badge shrink-0">Bạn</span>
+        }
+      </span>
+      <span class="shrink-0 text-xl font-bold tabular-nums leading-none">{{ player.score }}</span>
+    </div>
   }
 </div>

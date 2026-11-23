@@ -193,3 +193,103 @@ export interface RoundDataMap {
 }
 
 export type RoundData = RoundDataMap[RoundKind];
+
+// ------------------------------------------------------------------ Live state
+
+export interface ActiveAudioState {
+  code: string;
+  loop: boolean;
+  /** Server epoch ms when this audio track started. */
+  startedAt: number;
+  /** Optional nominal duration in ms for non-looping timed tracks. */
+  durationMs?: number;
+}
+
+export type VideoTarget = 'tt' | 'vd';
+
+export interface VideoPlaybackState {
+  playing: boolean;
+  /** Server epoch ms when playback last started/resumed; null when paused. */
+  startedAt: number | null;
+  /** Video timestamp in seconds when paused or last seeked/restarted. */
+  positionSec: number;
+  /** Normalized volume in [0, 1]. */
+  volume: number;
+  muted: boolean;
+  /** Remote fullscreen stage mode (applied to viewer screens). */
+  fullscreen: boolean;
+}
+
+export type VideoControlAction =
+  | 'play'
+  | 'pause'
+  | 'toggle'
+  | 'restart'
+  | 'seek'
+  | 'volume'
+  | 'mute'
+  | 'fullscreen';
+
+export interface VideoControlCommand {
+  target: VideoTarget;
+  action: VideoControlAction;
+  value?: number | boolean;
+}
+
+export interface VideoStateUpdate {
+  target: VideoTarget;
+  state: VideoPlaybackState;
+  serverTime: number;
+}
+
+/**
+ * Ephemeral in-memory match state snapshotted for reconnecting, refreshing, or
+ * late-joining clients. Sensitive fields (e.g. active question answers) are
+ * stripped for non-staff roles by the server.
+ */
+export interface LiveStateSnapshot {
+  /** Server epoch ms when this snapshot was built (avoids client clock skew). */
+  serverTime: number;
+  clock: {
+    running: boolean;
+    remaining: number;
+    maxSeconds: number;
+    paused: boolean;
+  };
+  activeLoopSfx: ActiveAudioState | null;
+  activeTimedSfx: ActiveAudioState | null;
+  kd: {
+    question: KdQuestion | null;
+    previousAnswer: string | null;
+    turnPlayerIndex: number;
+    buzzerOpen: boolean;
+    maxQuestionCount: number;
+    currentQuestionNo: number;
+    decisionTimerOwner: 'none' | 'admin' | 'player';
+    decisionRemaining: number;
+  };
+  vcnv: {
+    question: VcnvQuestion | null;
+    highlightedQuestionId: number | null;
+  };
+  tt: {
+    question: TtQuestion | null;
+    videoPlaying: boolean;
+    videoStartedAt: number | null;
+    video: VideoPlaybackState;
+  };
+  vd: {
+    question: VdQuestion | null;
+    stealingPlayerIndex: number;
+    stealWindowOpen: boolean;
+    stealRemaining: number;
+    videoPlaying: boolean;
+    videoStartedAt: number | null;
+    video: VideoPlaybackState;
+  };
+  chp: {
+    question: ChpQuestion | null;
+    turnPlayerIndex: number;
+    buzzerOpen: boolean;
+  };
+}

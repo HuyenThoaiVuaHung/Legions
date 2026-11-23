@@ -15,31 +15,33 @@
       @if (chosenRow(); as chosen) {
         <menu-item title="Preview hình ảnh, video của câu hỏi" orientation="vertical">
           <div class="h-full rounded-md overflow-hidden">
-            <div class="w-full text-center grid place-items-center grid-flow-col">
+            <div class="w-full text-center grid place-items-center grid-flow-col gap-4">
               @if (chosen.type === 'image') {
                 <div class="w-full">
                   <img
-                    class="w-96 aspect-video"
+                    class="w-96 aspect-video object-contain"
                     [src]="media.resolve('tt', chosen.questionImage)"
                     alt="Hình ảnh câu hỏi"
                   />
                   <h6>Hình ảnh câu hỏi</h6>
                 </div>
-                @if (chosen.answerImage) {
-                  <div class="w-full">
-                    <img
-                      class="w-96 aspect-video"
-                      [src]="media.resolve('tt', chosen.answerImage)"
-                      alt="Hình ảnh đáp án"
-                    />
-                    <h6>Hình ảnh đáp án</h6>
-                  </div>
-                }
+              } @else {
+                <div class="w-full">
+                  <video class="w-full max-h-80 object-contain" [src]="media.resolve('tt', chosen.videoFile)" controls></video>
+                  <h6>Video câu hỏi</h6>
+                </div>
+              }
+              @if (chosen.answerImage) {
+                <div class="w-full">
+                  <img
+                    class="w-96 aspect-video object-contain"
+                    [src]="media.resolve('tt', chosen.answerImage)"
+                    alt="Hình ảnh đáp án"
+                  />
+                  <h6>Hình ảnh đáp án</h6>
+                </div>
               }
             </div>
-            @if (chosen.type === 'video') {
-              <video class="w-full" [src]="media.resolve('tt', chosen.videoFile)" controls></video>
-            }
           </div>
         </menu-item>
       }
@@ -47,6 +49,7 @@
     <mat-card-actions align="end">
       <button
         mat-button
+        [disabled]="!chosenRow()"
         title="Chỉnh sửa câu hỏi đang chọn (nhấn 1 lần vào câu hỏi cần sửa)"
         (click)="editQuestion()"
       >
@@ -63,6 +66,12 @@
           <mat-icon>visibility</mat-icon>
         </button>
       }
+      <button matTooltip="Thêm câu hỏi (tối đa 6)" [disabled]="(round()?.questions?.length ?? 0) >= maxQuestions" mat-icon-button (click)="addQuestion()">
+        <mat-icon>add</mat-icon>
+      </button>
+      <button matTooltip="Xóa câu hỏi" [disabled]="!chosenRow()" mat-icon-button (click)="deleteQuestion()">
+        <mat-icon>remove</mat-icon>
+      </button>
     </mat-card-actions>
   </mat-card>
   <mat-card appearance="outlined" class="w-full h-full">
@@ -71,29 +80,28 @@
     </mat-card-header>
     <mat-card-content class="overflow-y-auto">
       <menu-item title="Thời gian" description="Thời gian hiện tại: {{ currentTime() }} giây">
-        @if (displayingRow(); as displaying) {
-          @if (displaying.type === 'image') {
-            <button mat-flat-button (click)="startTimer(imageTimerSeconds(displaying))">
-              <mat-icon>timer_outline</mat-icon>
-              Bắt đầu đếm ngược
-            </button>
-          } @else {
-            <button mat-flat-button (click)="togglePlayVideo()">
-              <mat-icon>play_circle</mat-icon>
-              Phát video
-            </button>
-          }
-        } @else {
-          <button mat-flat-button disabled>
-            <mat-icon>timer_off</mat-icon>
-            Bắt đầu đếm ngược
-          </button>
+        @for (sec of timerPresets(); track sec) {
+          <button mat-button (click)="startTimer(sec)">{{ sec }}s</button>
         }
         <button mat-button (click)="pauseClock()">
           <mat-icon>play_pause</mat-icon>
           Tạm dừng/tiếp tục
         </button>
       </menu-item>
+      @if (displayingRow()?.type === 'video') {
+        <menu-item
+          title="Điều khiển video"
+          description="Phát, bật toàn màn hình và chỉnh âm lượng video trên màn hình khán giả."
+          orientation="vertical"
+        >
+          <video-control-bar
+            target="tt"
+            [src]="displayingVideoUrl()"
+            [showPlayWithTimer]="true"
+            (playWithTimer)="togglePlayVideo(true)"
+          />
+        </menu-item>
+      }
       <menu-item
         title="Ẩn/Hiện đáp án"
         description="Đáp án hiện đang được {{ round()?.showAnswer ? 'hiện' : 'ẩn' }}"

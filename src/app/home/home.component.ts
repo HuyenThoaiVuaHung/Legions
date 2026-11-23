@@ -8,7 +8,6 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatTooltip } from '@angular/material/tooltip';
-import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { MatCard, MatCardContent } from '@angular/material/card';
 import { JoinRoomResponse, PublicRoom, Role } from '../core/contracts/api';
@@ -18,8 +17,6 @@ import { HostLoginDialogComponent } from '../host/host-login-dialog.component';
 import { STORAGE_KEYS } from '../core/constants';
 import { queryParamState } from '../core/query-param';
 import { RoomJoinDialogComponent } from './room-join-dialog.component';
-import { ApiService } from '../core/services/api.service';
-import { joinError } from '../host/join-error';
 import { AssetService } from '../core/services/asset.service';
 import { ConnectionStatus, NetworkService } from '../core/services/network.service';
 import { ScreenService } from '../core/services/screen.service';
@@ -99,10 +96,6 @@ export class HomeComponent implements OnInit, OnDestroy {
       });
   }
 
-  private readonly api = inject(ApiService);
-  protected readonly joinMessage = signal('');
-  protected readonly usernameNeeded = signal(false);
-  protected readonly joinForm = inject(FormBuilder).group({ code: '', secret: '', username: '' });
   private readonly formBuilder = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -153,16 +146,16 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   async connect(): Promise<void> {
     const url = this.urlForm.controls.serverUrl.value ?? '';
-    try { await this.session.connect(url); } catch { this.joinMessage.set('Không thể kết nối tới máy chủ.'); }
+    try { await this.session.connect(url); } catch { /* status signal surfaces error */ }
   }
-
 
   async joinAsViewer(): Promise<void> {
     const url = this.defaultUrl();
     if (!url) return;
     await this.session.connect(url);
     if (this.session.multiRoom()) return;
-    await this.session.login('');
+    const role = await this.session.login('');
+    void this.router.navigateByUrl(this.session.homeFor(role));
   }
 
   async setupBackScreen(): Promise<void> {
@@ -178,22 +171,9 @@ export class HomeComponent implements OnInit, OnDestroy {
       .afterClosed().subscribe((signedIn) => { if (signedIn) void this.router.navigateByUrl('/host'); });
   }
 
-  async joinRoom(): Promise<void> {
-    this.session.followMatch.set(true);
-    const { code, secret, username } = this.joinForm.getRawValue();
-    try {
-      const result = await this.api.joinRoom({ code: code ?? '', secret: secret || undefined, username: username || undefined });
-      await this.session.acceptRoomSession(result, code ?? undefined);
-      void this.router.navigateByUrl(this.session.homeFor(result.roleId));
-    } catch (error) {
-      if (error instanceof HttpErrorResponse && error.status === 400 && /username/i.test(error.error?.error ?? '')) this.usernameNeeded.set(true);
-      this.joinMessage.set(joinError(error));
-    }
-  }
-
   async login(): Promise<void> {
     const secret = this.secretForm.controls.secret.value ?? '';
     const role = await this.session.login(secret);
-    if (role === Role.Admin || role === Role.Mc) void this.router.navigateByUrl(this.session.homeFor(role));
+    void this.router.navigateByUrl(this.session.homeFor(role));
   }
 }

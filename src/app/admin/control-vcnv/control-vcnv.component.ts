@@ -31,7 +31,8 @@ const HIDE_QUESTION_ID = 7;
 const ALL_ROW_IDS = [1, 2, 3, 4, 5];
 
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { uploadObstacleImage } from '../../core/vcnv-image.util';
+import { CnvViewerComponent } from '../../editor/components/cnv-viewer/cnv-viewer.component';
+import { VCNV_PIECE_COUNT, fetchObstaclePieceUrls, uploadObstacleImage } from '../../core/vcnv-image.util';
 import { ResizeGroupDirective } from '../../components/resizable/resize-group.directive';
 
 @Component({
@@ -41,6 +42,7 @@ import { ResizeGroupDirective } from '../../components/resizable/resize-group.di
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ResizeGroupDirective,
+    CnvViewerComponent,
     MatButton,
     MatIconButton,
     MatCard,
@@ -106,6 +108,19 @@ export class ControlVcnvComponent {
   }
 
   protected readonly uploadingObstacle = signal(false);
+  private readonly obstaclePieceUrls = signal<string[]>([]);
+  private lastPieceToken = '';
+  protected readonly obstaclePreviewSrcs = computed<readonly string[]>(() => {
+    const obstacle = this.round()?.obstacle;
+    if (!obstacle) return [];
+    const pieces = this.obstaclePieceUrls();
+    if (pieces.length === VCNV_PIECE_COUNT) return pieces;
+    return obstacle.imageFile ? [this.media.resolve('vcnv', obstacle.imageFile)] : [];
+  });
+  protected readonly hasObstacleImage = computed(() => {
+    const obstacle = this.round()?.obstacle;
+    return !!(obstacle?.imageFile || obstacle?.imagePieceFiles?.length === VCNV_PIECE_COUNT);
+  });
   protected readonly obstacleColumns: readonly TableColumn[] = [
     { key: 'question', label: 'Giải thích', flex: 3, edit: 'text' },
     { key: 'answer', label: 'Đáp án', flex: 2, edit: 'text' },
@@ -128,6 +143,29 @@ export class ControlVcnvComponent {
     ]) {
       destroyRef.onDestroy(off);
     }
+
+    destroyRef.onDestroy(() => {
+      for (const url of this.obstaclePieceUrls()) URL.revokeObjectURL(url);
+    });
+
+    effect(() => {
+      const files = this.round()?.obstacle.imagePieceFiles;
+      const token = files?.length === VCNV_PIECE_COUNT ? files.join(',') : '';
+      if (token === this.lastPieceToken) return;
+      this.lastPieceToken = token;
+      for (const url of this.obstaclePieceUrls()) URL.revokeObjectURL(url);
+      this.obstaclePieceUrls.set([]);
+      if (!token) return;
+      void fetchObstaclePieceUrls(this.api)
+        .then((urls) => {
+          if (this.lastPieceToken !== token) {
+            for (const url of urls) URL.revokeObjectURL(url);
+            return;
+          }
+          this.obstaclePieceUrls.set(urls);
+        })
+        .catch(() => {});
+    });
 
     effect(() => {
       const round = this.round();

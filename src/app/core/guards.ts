@@ -10,7 +10,7 @@ export const roomGuard: CanActivateFn = async (route) => {
   const router = inject(Router);
   const code = route.paramMap.get('code') ?? '';
   await session.ready;
-  return (await session.enterRoomCode(code)) ? true : router.parseUrl('/?join=' + encodeURIComponent(code));
+  return (await session.enterRoomCode(code)) ? true : router.parseUrl('/r/' + encodeURIComponent(code));
 };
 
 export const adminGuard: CanActivateFn = async () => {
@@ -28,5 +28,8 @@ export const mcGuard: CanActivateFn = async () => {
   return role === Role.Mc || role === Role.Admin ? true : router.parseUrl('/');
 };
 
-export const hostGuard: CanActivateFn = () =>
-  localStorage.getItem(STORAGE_KEYS.accountToken) ? true : inject(Router).parseUrl('/?signin=1');
+export const hostGuard: CanActivateFn = (route) =>
+  route.pathFromRoot.some(node => node.routeConfig?.path === 'bank/:id') ||
+  localStorage.getItem(STORAGE_KEYS.accountToken) !== null
+    ? true
+    : inject(Router).parseUrl('/?signin=1');

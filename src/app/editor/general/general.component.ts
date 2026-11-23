@@ -17,12 +17,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { IMiscMedia, Pallette } from '../editor.interfaces';
 import { EditorMediaService } from '../services/editor.media.service';
+import { HostedSettingsDirective } from '../services/hosted-settings.directive';
 
 @Component({
   selector: 'app-general',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.Eager,
   imports: [
+    HostedSettingsDirective,
     MatCardModule,
     MatExpansionModule,
     MatButtonModule,

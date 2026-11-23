@@ -8,9 +8,10 @@ import { EditorMediaService } from '../services/editor.media.service';
 import { DialogService } from '../services/dialog.service';
 import { CnvViewerComponent } from '../components/cnv-viewer/cnv-viewer.component';
 import { MatButtonModule } from '@angular/material/button';
+import { EmptyStateComponent } from '../../components/empty-state/empty-state.component';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { EditableComponent, EditModeDirective, ViewModeDirective } from '@ngneat/edit-in-place';
+import { EditableComponent, EditModeDirective, ViewModeDirective, EditableOnEnterDirective, EditableOnEscapeDirective, EditableFocusDirective } from '@ngneat/edit-in-place';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule } from '@angular/forms';
 import { MatInputModule } from '@angular/material/input';
@@ -20,6 +21,7 @@ import { MatInputModule } from '@angular/material/input';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.Eager,
   imports: [
+    EmptyStateComponent,
     QuestionTableComponent,
     ImageInputComponent,
     CnvViewerComponent,
@@ -27,6 +29,9 @@ import { MatInputModule } from '@angular/material/input';
     MatIconModule,
     MatProgressSpinnerModule,
     EditableComponent,
+    EditableOnEnterDirective,
+    EditableOnEscapeDirective,
+    EditableFocusDirective,
     EditModeDirective,
     ViewModeDirective,
     MatFormFieldModule,
@@ -44,6 +49,14 @@ export class EditorVcnvComponent {
   ) {}
   public cache: string = '';
   public imageProccessing: boolean = false;
+  async editObstacle(field: EditableComponent): Promise<void> {
+    if (await this.editorDataService.hosted?.begin('settings')) field.displayEditMode();
+  }
+  saveObstacle(): void {
+    const hosted = this.editorDataService.hosted;
+    if (hosted) void hosted.commit();
+    else this.save();
+  }
   save() {
     this.editorDataService.saveCurrentEditorData();
   }
@@ -56,33 +69,37 @@ export class EditorVcnvComponent {
     );
     this.save();
   }
-  async handleCnvImage() {
-    const file = document.createElement('input');
-    file.type = 'file';
-    file.accept = 'image/*';
-    file.click();
-    file.onchange = async () => {
-      if (this.editorDataService.editorData) {
+  handleCnvImage(selectedFile?: File): void {
+    const process = async (file?: File) => {
+      if (file && this.editorDataService.editorData) {
         const cropped = await this.dialogService.openCropDialog(
-          file.files![0],
+          file,
           16,
           9
         );
         if (cropped) {
+          const hosted = this.editorDataService.hosted;
+          if (hosted && !await hosted.begin('settings')) return;
           this.imageProccessing = true;
           this.editorDataService.editorData.questionBank.vcnv.cnvMediaSrcNames =
             await this.editorMediaService.handleCnvMedia(
               cropped,
               this.editorDataService.editorData.uid
             );
-          this.save();
           this.editorDataService.editorData =
             await this.editorDataService.resolveMediaSrcs(
               this.editorDataService.editorData
             );
+          this.saveObstacle();
           this.imageProccessing = false;
         }
       }
     };
+    if (selectedFile) { void process(selectedFile); return; }
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = () => { void process(fileInput.files?.[0]); };
+    fileInput.click();
   }
 }

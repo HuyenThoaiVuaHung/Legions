@@ -1,0 +1,84 @@
+<div class="vctrl">
+  @if (duration() > 0) {
+    <div class="vctrl-scrubber">
+      <span class="vctrl-time">{{ currentTimeLabel() }}</span>
+      <mat-slider
+        class="vctrl-seek-slider"
+        min="0"
+        [max]="duration()"
+        step="0.5"
+        [disabled]="disabled()"
+        [displayWith]="formatThumb"
+        discrete
+      >
+        <input
+          matSliderThumb
+          [value]="playheadSec()"
+          (input)="onScrubInput($any($event.target).valueAsNumber)"
+          (valueChange)="onScrubCommit($event)"
+        />
+      </mat-slider>
+      <span class="vctrl-time">{{ durationLabel() }}</span>
+    </div>
+  }
+
+  <div class="vctrl-row">
+    <div class="vctrl-group">
+      @if (showPlayWithTimer()) {
+        <button mat-flat-button [disabled]="disabled()" (click)="playWithTimer.emit()">
+          <mat-icon>play_circle</mat-icon>
+          Phát video + đếm giờ
+        </button>
+      }
+      <button mat-button [disabled]="disabled()" (click)="send('toggle')">
+        <mat-icon>{{ state().playing ? 'pause_circle' : 'play_circle' }}</mat-icon>
+        {{ state().playing ? 'Tạm dừng' : 'Phát video' }}
+      </button>
+      <button
+        mat-icon-button
+        [disabled]="disabled()"
+        matTooltip="Phát lại từ đầu"
+        (click)="send('restart')"
+      >
+        <mat-icon>replay</mat-icon>
+      </button>
+      <button
+        [attr.aria-pressed]="state().fullscreen"
+        [class.vctrl-active]="state().fullscreen"
+        mat-button
+        [disabled]="disabled()"
+        matTooltip="Bật/tắt toàn màn hình trên màn hình khán giả"
+        (click)="send('fullscreen')"
+      >
+        <mat-icon>{{ state().fullscreen ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+        {{ state().fullscreen ? 'Thu nhỏ' : 'Toàn màn hình' }}
+      </button>
+    </div>
+
+    <div class="vctrl-volume">
+      <button
+        mat-icon-button
+        [disabled]="disabled()"
+        [matTooltip]="state().muted ? 'Bật âm thanh' : 'Tắt tiếng'"
+        (click)="send('mute')"
+      >
+        <mat-icon>{{ state().muted || volumePercent() === 0 ? 'volume_off' : 'volume_up' }}</mat-icon>
+      </button>
+      <mat-slider
+        class="vctrl-slider"
+        min="0"
+        max="100"
+        step="5"
+        [disabled]="disabled()"
+        discrete
+      >
+        <input
+          matSliderThumb
+          [value]="state().muted ? 0 : volumePercent()"
+          (valueChange)="onVolumeChange($event)"
+        />
+      </mat-slider>
+      <span class="vctrl-pct">{{ state().muted ? '0%' : volumePercent() + '%' }}</span>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,8 @@
+.media-preview {
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  max-block-size: 32rem;
+  object-fit: contain;
+  background: var(--mat-sys-surface-container-low);
+}

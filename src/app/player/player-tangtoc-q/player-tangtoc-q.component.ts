@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatIconButton } from '@angular/material/button';
 import { MatFormField } from '@angular/material/form-field';
@@ -13,13 +13,23 @@ import { SessionService } from '../../core/services/session.service';
 import { SfxService } from '../../core/services/sfx.service';
 import { CountdownComponent } from '../../components/countdown/countdown.component';
 import { PlayerListComponent } from '../../components/player-list/player-list.component';
+import { StageVideoPlayerComponent } from '../../components/stage-video-player/stage-video-player.component';
 
 @Component({
   selector: 'app-player-tangtoc-q',
   templateUrl: './player-tangtoc-q.component.html',
   styleUrl: './player-tangtoc-q.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CountdownComponent, PlayerListComponent, MatFormField, MatInput, FormsModule, MatIconButton, MatIcon],
+  imports: [
+    CountdownComponent,
+    PlayerListComponent,
+    StageVideoPlayerComponent,
+    MatFormField,
+    MatInput,
+    FormsModule,
+    MatIconButton,
+    MatIcon,
+  ],
 })
 export class PlayerTangtocQComponent {
   private readonly api = inject(ApiService);
@@ -42,17 +52,22 @@ export class PlayerTangtocQComponent {
     return round ? (round.questions[round.activeQuestionIndex] ?? null) : null;
   });
 
+  protected readonly answerImageUrl = computed(() => {
+    const q = this.currentQuestion();
+    const round = this.round();
+    if (!q || !round?.showAnswer || !q.answerImage) return null;
+    return this.media.resolve('tt', q.answerImage);
+  });
+
   protected readonly imageUrl = computed(() => {
     const q = this.currentQuestion();
-    if (!q || q.type !== 'image') return null;
-    const round = this.round();
-    const name = round?.showAnswer ? q.answerImage : q.questionImage;
-    return this.media.resolve('tt', name);
+    if (!q || q.type !== 'image' || !q.questionImage) return null;
+    return this.media.resolve('tt', q.questionImage);
   });
 
   protected readonly videoUrl = computed(() => {
     const q = this.currentQuestion();
-    if (!q || q.type !== 'video') return null;
+    if (!q || q.type !== 'video' || !q.videoFile) return null;
     return this.media.resolve('tt', q.videoFile);
   });
 
@@ -60,18 +75,42 @@ export class PlayerTangtocQComponent {
 
   constructor() {
     void this.loadRound();
+    this.network.emit('request-live-state');
+
+    effect(() => {
+      const snapshot = this.session.liveState();
+      if (!snapshot) return;
+      this.currentTime.set(snapshot.clock.remaining);
+      if (snapshot.clock.maxSeconds > 0) this.maxTime.set(snapshot.clock.maxSeconds);
+    });
 
     const offs = [
       this.network.on<[string]>('play-sfx', (code) => this.sfx.play(code)),
-      this.network.on<[TtRound]>('update-tangtoc-data', (data) => this.round.set(data)),
+      this.network.on<[TtRound]>('update-tangtoc-data', (data) => this.onRound(data)),
       this.network.on<[number]>('update-clock', (clock) => this.onClock(clock)),
-      this.network.on<[]>('tangtoc-play-video', () => this.toggleVideoPlay()),
     ];
     this.destroyRef.onDestroy(() => offs.forEach((off) => off()));
   }
 
   private async loadRound(): Promise<void> {
-    this.round.set(await this.api.getRound('tt'));
+    this.onRound(await this.api.getRound('tt'));
+  }
+
+  private onRound(data: TtRound): void {
+    this.round.set(data);
+    const selfIndex = this.session.playerIndex();
+    if (selfIndex === null) return;
+    const own = data.playerAnswers.find((a) => a.playerIndex === selfIndex);
+    if (own?.answer) {
+      this.answerCache.set(own.answer);
+      if (own.timestamp > 0 && data.timerStartTimestamp > 0) {
+        const elapsedMs = Math.max(0, own.timestamp - data.timerStartTimestamp);
+        this.readableTime.set(`${Math.trunc(elapsedMs / 1000)}s${elapsedMs % 1000}ms`);
+      }
+    } else if (own && !own.answer) {
+      this.answerCache.set('');
+      this.readableTime.set('');
+    }
   }
 
   private onClock(clock: number): void {
@@ -81,14 +120,6 @@ export class PlayerTangtocQComponent {
       this.maxTime.set(clock);
     }
     this.currentTime.set(clock);
-  }
-
-  private toggleVideoPlay(): void {
-    const video = document.getElementById('video-1') as HTMLVideoElement | null;
-    if (!video) return;
-    video.muted = true;
-    if (video.paused) void video.play();
-    else video.pause();
   }
 
   submitAnswer(): void {

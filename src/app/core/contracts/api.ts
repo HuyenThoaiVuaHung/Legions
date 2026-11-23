@@ -60,11 +60,11 @@ export interface ApiError {
   error: string;
 }
 
-/** Per-room shared secrets; players additionally identify by username. */
+/** Per-room shared secrets; each player seat has its own code. */
 export interface RoomSecrets {
   admin: string;
   mc: string;
-  player: string;
+  players: string[];
   spectator: string;
 }
 
@@ -73,6 +73,8 @@ export type LinkRole = 'viewer' | 'mc' | 'player';
 export interface RoomLink {
   id: string;
   role: LinkRole;
+  /** 0-based player seat index; present when role === 'player'. */
+  playerIndex?: number;
   view?: string;
   label: string;
   createdAt: number;
@@ -82,6 +84,8 @@ export interface RoomLink {
 }
 export interface CreateRoomLinkRequest {
   role: LinkRole;
+  /** Required when role === 'player' (0-based seat index). */
+  playerIndex?: number;
   view?: string;
   label: string;
   expiresInSeconds?: number;
@@ -89,9 +93,9 @@ export interface CreateRoomLinkRequest {
 }
 export interface CreateRoomLinkResponse { link: RoomLink; token: string; path: string }
 export type ListRoomLinksResponse = RoomLink[];
-export interface JoinLinkRequest { token: string; username?: string }
+export interface JoinLinkRequest { token: string }
 export type JoinLinkResponse = JoinRoomResponse;
-export interface RoomSettingsRequest { spectatorMode?: SpectatorMode; listed?: boolean }
+export interface RoomSettingsRequest { spectatorMode?: SpectatorMode; listed?: boolean; name?: string }
 export type RoomSettingsResponse = RoomSettingsRequest;
 export interface ServerInfo { multiRoom: boolean; version: string }
 export type SessionResponse = TokenPayload;
@@ -109,8 +113,8 @@ export interface PublicRoom {
 export interface RoomInfo {
   roomId: string;
   code: string;
+  name: string;
   expiresAt: number | null;
-  seats: (string | null)[];
   spectatorMode: SpectatorMode;
   listed: boolean;
   ownerAccountId: string;
@@ -135,17 +139,19 @@ export interface JoinRoomRequest {
   code: string;
   /** Omitted: join as a spectator. Otherwise one of the room's secrets. */
   secret?: string;
-  /** Required with the player secret; claims (or reclaims) a seat. */
-  username?: string;
 }
 
 export interface JoinRoomResponse extends LoginResponse {
   roomId: string;
 }
 
-/** POST /api/rooms/current/secrets — rotate one role's secret. */
+export type RotateSecretRole = 'admin' | 'mc' | 'player' | 'spectator';
+
+/** POST /api/rooms/current/secrets — rotate one role's secret (or one player's seat secret). */
 export interface RotateSecretRequest {
-  role: keyof RoomSecrets;
+  role: RotateSecretRole;
+  /** Required when role === 'player' (0-based seat index). */
+  playerIndex?: number;
 }
 
 /** POST /api/rooms/current/transfer — owner hands the room to another host. */
@@ -178,6 +184,7 @@ export interface RecoverAccountRequest {
 export interface OwnedRoom {
   roomId: string;
   code: string;
+  name: string;
   createdAt: number;
 }
 
@@ -221,6 +228,7 @@ export const API_PATHS = {
   login: '/api/auth/login',
   config: '/api/config',
   match: '/api/match',
+  matchLiveState: '/api/match/live-state',
   matchPosition: '/api/match/position',
   matchPlayer: (index: number) => `/api/match/players/${index}`,
   round: (kind: RoundKind) => `/api/rounds/${kind}`,
@@ -248,9 +256,9 @@ export const API_PATHS = {
   /** The caller's own room (from the token): DELETE closes it. */
   currentRoom: '/api/rooms/current',
   rotateSecret: '/api/rooms/current/secrets',
-  releaseSeat: (index: number) => `/api/rooms/current/seats/${index}`,
   transferRoom: '/api/rooms/current/transfer',
   /** A host's account token → an admin session in a room they own. */
+  room: (roomId: string) => `/api/rooms/${roomId}`,
   enterRoom: (roomId: string) => `/api/rooms/${roomId}/enter`,
   signup: '/api/accounts',
   accountLogin: '/api/accounts/login',

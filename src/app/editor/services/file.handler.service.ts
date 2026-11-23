@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { FsService } from './fs.service';
 import { EditorMediaService } from './editor.media.service';
 import { EditorDataService } from './editor.data.service';
+import { exportEditorDataToExcel, parseExcelToEditorData, saveBlob } from './excel-editor.util';
 @Injectable({
   providedIn: 'root'
 })
@@ -29,29 +30,33 @@ export class FileHandlerService {
     )
     zip.file('editorData.json', this.editorDataService.serializeEditorData(editorData));
     const blob = await zip.generateAsync({ type: 'blob' });
-    this.saveBlob(blob, `${editorData.matchData.matchName}.legion`);
+    saveBlob(blob, `${editorData.matchData.matchName || 'match'}.legion`);
   }
-  public async loadEditorData(file: File): Promise<void> {
+  public async downloadExcelData(uid: string): Promise<void> {
+    const editorData = await this.editorDataService.loadLocalEditorData(uid);
+    saveBlob(exportEditorDataToExcel(editorData), `${editorData.matchData.matchName || 'match'}.xlsx`);
+  }
+  public async loadEditorData(file: File): Promise<string> {
     const zip = new JSZip();
     await zip.loadAsync(file);
+    const dataFile = zip.file('editorData.json');
+    if (!dataFile) throw new Error('Tệp .legion không hợp lệ (thiếu editorData.json).');
     const editorData = this.editorDataService.normalizeEditorData(
-      JSON.parse(await zip.file('editorData.json')!.async('text'))
+      JSON.parse(await dataFile.async('text'))
     );
     editorData.uid = crypto.randomUUID();
     await this.editorDataService.saveLocalEditorData(editorData);
-    for (const file of Object.values(zip.files)) {
-      if (file.name !== 'editorData.json' && file.dir === false && !file.name.split('/').includes('..')) {
-        const media = await file.async('blob');
-        await this.fs.writeLocalFile(media, `/${editorData.uid}/${file.name}`)
+    for (const entry of Object.values(zip.files)) {
+      if (entry.name !== 'editorData.json' && entry.dir === false && !entry.name.split('/').includes('..')) {
+        const media = await entry.async('blob');
+        await this.fs.writeLocalFile(media, `/${editorData.uid}/${entry.name}`)
       }
     }
+    return editorData.uid;
   }
-  private saveBlob(blob: Blob, fileName: string): void {
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = fileName;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  public async loadExcelData(file: File): Promise<string> {
+    const editorData = this.editorDataService.normalizeEditorData(await parseExcelToEditorData(file));
+    await this.editorDataService.saveLocalEditorData(editorData);
+    return editorData.uid;
   }
 }

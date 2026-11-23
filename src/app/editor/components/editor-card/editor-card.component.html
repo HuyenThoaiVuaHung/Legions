@@ -1,4 +1,13 @@
 @if (editorData) {
+@if (hosted) {
+  <mat-card appearance="outlined">
+    <mat-card-content>
+      <h3 class="mat-title-large">{{ editorData.matchData.matchName }}</h3>
+      <p class="text-sm opacity-70">Bản nháp · Chỉ trên trình duyệt này</p>
+      <div class="flex flex-wrap gap-2 mt-4"><button mat-flat-button (click)="load()">Mở bản nháp</button><button mat-button (click)="delete()">Xoá</button></div>
+    </mat-card-content>
+  </mat-card>
+} @else {
 <mat-card (dblclick)="this.load()" @fade appearance="outlined" class="group h-full">
   <mat-card-content>
     <h6>
@@ -27,4 +36,5 @@
     </button>
   </div>
 </mat-card>
+}
 }

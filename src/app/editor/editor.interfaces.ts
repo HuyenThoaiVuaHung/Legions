@@ -59,14 +59,17 @@ export interface IPlayer {
   picUid?: string;
 }
 
+export type MatchVersion = 23 | 24 | 25 | 26;
+
 export interface IMatchData {
   matchName: string;
-  matchVersion: 23 | 24;
+  matchVersion: MatchVersion;
   matchPos: MatchPosition;
   players: IPlayer[];
 }
 
 export interface IQuestion {
+  bankId?: string;
   question: string;
   answer: string;
   type: QuestionType;
