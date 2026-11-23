@@ -103,6 +103,8 @@ export interface ObstacleBuzz {
   playerIndex: number;
   timestamp: number;
   readableTime: string;
+  /** Server ms from the clock's real start to arrival; ranking key when present. */
+  elapsedMs?: number;
 }
 
 export interface VcnvRound {
@@ -135,6 +137,8 @@ export interface TtAnswer {
   timestamp: number;
   readableTime: string;
   correct: boolean;
+  /** Server ms from the clock's real start to arrival; ranking key when present. */
+  elapsedMs?: number;
 }
 
 export interface TtRound {
@@ -250,12 +254,14 @@ export interface VideoStateUpdate {
 export interface LiveStateSnapshot {
   /** Server epoch ms when this snapshot was built (avoids client clock skew). */
   serverTime: number;
+  /** @deprecated use `timers.main`; kept for one release. */
   clock: {
     running: boolean;
     remaining: number;
     maxSeconds: number;
     paused: boolean;
   };
+  timers: Record<TimerId, CountdownView>;
   activeLoopSfx: ActiveAudioState | null;
   activeTimedSfx: ActiveAudioState | null;
   kd: {
@@ -267,6 +273,7 @@ export interface LiveStateSnapshot {
     currentQuestionNo: number;
     decisionTimerOwner: 'none' | 'admin' | 'player';
     decisionRemaining: number;
+    flow: KdFlowState;
   };
   vcnv: {
     question: VcnvQuestion | null;
@@ -292,4 +299,81 @@ export interface LiveStateSnapshot {
     turnPlayerIndex: number;
     buzzerOpen: boolean;
   };
+}
+
+// ------------------------------------------------------------------ Clocks
+
+/** Every server-side countdown a room owns. */
+export type TimerId = 'main' | 'kdDecision' | 'vdSteal';
+
+export type CountdownStatus = 'idle' | 'pending' | 'running' | 'paused' | 'expired' | 'stopped';
+
+/**
+ * Wire view of one countdown, sent as the 'clock-state' event on every
+ * transition (never per tick). Clients render locally from `deadline`
+ * corrected by the 'time-sync' offset.
+ */
+export interface CountdownView {
+  id: TimerId;
+  status: CountdownStatus;
+  durationMs: number;
+  /** Exact remainder at `serverTime`; frozen while paused, 0 when idle/expired/stopped. */
+  remainingMs: number;
+  /** Server epoch ms the current run begins (in the future while pending). */
+  startsAt: number | null;
+  /** Server epoch ms of expiry while pending/running; null otherwise. */
+  deadline: number | null;
+  /** Server epoch ms when this view was built. */
+  serverTime: number;
+  /** Increases on every transition of this timer; drop views older than the last seen. */
+  seq: number;
+  /** Decision windows only: who the window belongs to. */
+  owner?: 'admin' | 'player';
+}
+
+// ------------------------------------------------------- KD multiplayer flow
+
+/** Server-owned phase of the current multiplayer KD question. */
+export type KdPhase = 'idle' | 'reading' | 'buzzWindow' | 'answering' | 'awaitingMark' | 'resolved';
+
+/** What happens when the answer (or buzz) window expires. */
+export type KdTimeUpMode = 'manual' | 'autoWrong';
+
+export type KdVerdict = 'correct' | 'wrong' | 'noAnswer';
+
+/** Payload of 'correct-mark-kd' / 'wrong-mark-kd' / 'no-answer-kd' (admin to server). */
+export interface KdMarkCommand {
+  questionSeq: number;
+  /** NO_PLAYER (-1) only for 'no-answer-kd' when nobody buzzed. */
+  playerIndex: number;
+}
+
+export type KdMarkRejectReason = 'stale-question' | 'wrong-player' | 'bad-phase' | 'nothing-to-undo';
+
+/** 'kd-mark-rejected', sent only to the admin socket whose command was refused. */
+export interface KdMarkRejected {
+  reason: KdMarkRejectReason;
+  questionSeq: number;
+  turnPlayerIndex: number;
+}
+
+/** 'kd-resolved', broadcast when a question is graded (manually or automatically). */
+export interface KdResolved {
+  questionSeq: number;
+  playerIndex: number;
+  verdict: KdVerdict;
+  auto: boolean;
+  /** Score change applied to playerIndex, so undo can reverse it exactly. */
+  scoreDelta: number;
+}
+
+/** 'kd-phase', broadcast on every phase change; also LiveStateSnapshot.kd.flow. */
+export interface KdFlowState {
+  phase: KdPhase;
+  /** Increases on every 'broadcast-kd-question'. */
+  questionSeq: number;
+  turnPlayerIndex: number;
+  /** Most recent grade, undoable until the next grade. */
+  lastMark: KdResolved | null;
+  timeUpMode: KdTimeUpMode;
 }

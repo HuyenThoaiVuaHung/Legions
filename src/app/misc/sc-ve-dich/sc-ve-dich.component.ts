@@ -2,6 +2,7 @@ import { NgClass } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { RoundDataMap, VdQuestion } from '../../core/contracts/game';
 import { ApiService } from '../../core/services/api.service';
+import { ClockService } from '../../core/services/clock.service';
 import { ConnectionStatus, NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 
@@ -19,6 +20,7 @@ import { SessionService } from '../../core/services/session.service';
 export class ScVeDichComponent {
   private readonly session = inject(SessionService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly api = inject(ApiService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -26,7 +28,7 @@ export class ScVeDichComponent {
   readonly round = signal<RoundDataMap['vd'] | null>(null);
   readonly currentQuestion = signal<VdQuestion | null>(null);
   readonly stealingPlayerIndex = signal<number | null>(null);
-  readonly clockSeconds = signal(0);
+  readonly clockSeconds = this.clock.main.seconds;
 
   constructor() {
     if (this.network.status() === ConnectionStatus.Disconnected) {
@@ -44,7 +46,6 @@ export class ScVeDichComponent {
         this.stealingPlayerIndex.set(playerIndex),
       ),
       this.network.on<[]>('clear-stealing-player', () => this.stealingPlayerIndex.set(null)),
-      this.network.on<[number]>('update-clock', (seconds) => this.clockSeconds.set(seconds)),
     ];
     this.destroyRef.onDestroy(() => unsubs.forEach((unsub) => unsub()));
   }

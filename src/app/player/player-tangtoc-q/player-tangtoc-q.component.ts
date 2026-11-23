@@ -8,6 +8,7 @@ import { Role } from '../../core/contracts/api';
 import { TtRound } from '../../core/contracts/game';
 import { ApiService } from '../../core/services/api.service';
 import { MediaService } from '../../core/services/media.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 import { SfxService } from '../../core/services/sfx.service';
@@ -34,6 +35,7 @@ import { StageVideoPlayerComponent } from '../../components/stage-video-player/s
 export class PlayerTangtocQComponent {
   private readonly api = inject(ApiService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly sfx = inject(SfxService);
   protected readonly media = inject(MediaService);
   private readonly destroyRef = inject(DestroyRef);
@@ -41,8 +43,8 @@ export class PlayerTangtocQComponent {
   protected readonly Role = Role;
 
   protected readonly round = signal<TtRound | null>(null);
-  protected readonly currentTime = signal(0);
-  protected readonly maxTime = signal(0);
+  protected readonly currentTime = this.clock.main.seconds;
+  protected readonly maxTime = this.clock.main.maxSeconds;
   protected readonly playerAnswer = signal('');
   protected readonly answerCache = signal('');
   protected readonly readableTime = signal('');
@@ -71,7 +73,7 @@ export class PlayerTangtocQComponent {
     return this.media.resolve('tt', q.videoFile);
   });
 
-  protected readonly disabledAnswerBox = computed(() => this.currentTime() <= 0);
+  protected readonly disabledAnswerBox = computed(() => !this.clock.main.running());
 
   constructor() {
     void this.loadRound();
@@ -80,14 +82,16 @@ export class PlayerTangtocQComponent {
     effect(() => {
       const snapshot = this.session.liveState();
       if (!snapshot) return;
-      this.currentTime.set(snapshot.clock.remaining);
-      if (snapshot.clock.maxSeconds > 0) this.maxTime.set(snapshot.clock.maxSeconds);
+    });
+
+    // Clock hit zero (expired/stopped): wipe any half-typed answer.
+    effect(() => {
+      if (this.currentTime() <= 0) this.playerAnswer.set('');
     });
 
     const offs = [
       this.network.on<[string]>('play-sfx', (code) => this.sfx.play(code)),
       this.network.on<[TtRound]>('update-tangtoc-data', (data) => this.onRound(data)),
-      this.network.on<[number]>('update-clock', (clock) => this.onClock(clock)),
     ];
     this.destroyRef.onDestroy(() => offs.forEach((off) => off()));
   }
@@ -103,8 +107,8 @@ export class PlayerTangtocQComponent {
     const own = data.playerAnswers.find((a) => a.playerIndex === selfIndex);
     if (own?.answer) {
       this.answerCache.set(own.answer);
-      if (own.timestamp > 0 && data.timerStartTimestamp > 0) {
-        const elapsedMs = Math.max(0, own.timestamp - data.timerStartTimestamp);
+      if (own.elapsedMs !== undefined || (own.timestamp > 0 && data.timerStartTimestamp > 0)) {
+        const elapsedMs = Math.max(0, own.elapsedMs ?? own.timestamp - data.timerStartTimestamp);
         this.readableTime.set(`${Math.trunc(elapsedMs / 1000)}s${elapsedMs % 1000}ms`);
       }
     } else if (own && !own.answer) {
@@ -113,17 +117,8 @@ export class PlayerTangtocQComponent {
     }
   }
 
-  private onClock(clock: number): void {
-    if (clock <= 0) {
-      this.playerAnswer.set('');
-    } else if (this.currentTime() === 0) {
-      this.maxTime.set(clock);
-    }
-    this.currentTime.set(clock);
-  }
-
   submitAnswer(): void {
-    if (this.currentTime() <= 0 || !this.playerAnswer().trim()) return;
+    if (this.disabledAnswerBox() || !this.playerAnswer().trim()) return;
     this.network.emit('player-submit-answer-tangtoc', this.playerAnswer());
     this.answerCache.set(this.playerAnswer());
     this.playerAnswer.set('');
@@ -137,7 +132,7 @@ export class PlayerTangtocQComponent {
       const answer = this.round()?.playerAnswers.find((a) => a.playerIndex === index);
       const round = this.round();
       if (!answer || !round) return;
-      const elapsedMs = answer.timestamp - round.timerStartTimestamp;
+      const elapsedMs = answer.elapsedMs ?? answer.timestamp - round.timerStartTimestamp;
       this.readableTime.set(`${Math.trunc(elapsedMs / 1000)}s${elapsedMs % 1000}ms`);
     }, 200);
   }

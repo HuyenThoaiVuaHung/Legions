@@ -56,13 +56,21 @@ export class ResizeGroupDirective implements AfterViewInit, OnDestroy {
     this.handles.forEach((handle) => handle.remove());
   }
 
+  /** Main-axis size minus padding and border: with a zero basis, flex-grow shares out only the space left after those. */
   private size(panel: HTMLElement, column: boolean): number {
     const rect = panel.getBoundingClientRect();
-    return column ? rect.height : rect.width;
+    const style = getComputedStyle(panel);
+    const sides = column
+      ? ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'] as const
+      : ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth'] as const;
+    const edges = sides.reduce((sum, side) => sum + parseFloat(style[side]), 0);
+    return Math.max(1, (column ? rect.height : rect.width) - edges);
   }
 
+  /** Measure every panel before writing any: each write reflows the group and would skew the next reading. */
   private freeze(panels: HTMLElement[], column: boolean): void {
-    for (const panel of panels) panel.style.flex = `${this.size(panel, column)} 1 0`;
+    const sizes = panels.map((panel) => this.size(panel, column));
+    panels.forEach((panel, i) => (panel.style.flex = `${sizes[i]} 1 0`));
   }
 
   private shift(panels: HTMLElement[], index: number, column: boolean, delta: number): void {
@@ -70,7 +78,9 @@ export class ResizeGroupDirective implements AfterViewInit, OnDestroy {
     const after = panels[index];
     const beforeSize = parseFloat(before.style.flex);
     const afterSize = parseFloat(after.style.flex);
-    const clamped = Math.max(MIN_PANEL_PX - beforeSize, Math.min(afterSize - MIN_PANEL_PX, delta));
+    const floor = Math.min(MIN_PANEL_PX, beforeSize);
+    const ceiling = Math.max(afterSize - Math.min(MIN_PANEL_PX, afterSize), 0);
+    const clamped = Math.max(floor - beforeSize, Math.min(ceiling, delta));
     before.style.flex = `${beforeSize + clamped} 1 0`;
     after.style.flex = `${afterSize - clamped} 1 0`;
   }

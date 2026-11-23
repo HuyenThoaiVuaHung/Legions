@@ -133,6 +133,33 @@
         }
       }
 
+      <h3 class="mat-title-medium mt-4 mb-1">Chế độ hết giờ (Khởi động đối kháng)</h3>
+      <menu-item
+        title="Tự động chấm sai"
+        description="Hết thời gian trả lời thì tự trừ điểm; tắt thì chờ điều hành viên chấm."
+      >
+        <mat-slide-toggle
+          [checked]="draft().kdTimeUpMode === 'autoWrong'"
+          (change)="setAutoWrong($event.checked)"
+        ></mat-slide-toggle>
+      </menu-item>
+
+      <h3 class="mat-title-medium mt-4 mb-1">Độ trễ khởi động đồng hồ</h3>
+      @for (round of clockRounds; track round) {
+        <menu-item [title]="clockRoundLabels[round]" description="Khoảng chờ trước khi đồng hồ bắt đầu chạy.">
+          <mat-form-field subscriptSizing="dynamic" class="w-40">
+            <input
+              matInput
+              type="number"
+              min="0"
+              [ngModel]="draft().clockStartDelayMs[round]"
+              (ngModelChange)="setClockDelay(round, $event)"
+            />
+            <span matSuffix class="pr-2 opacity-70">ms</span>
+          </mat-form-field>
+        </menu-item>
+      }
+
       <h3 class="mat-title-medium mt-4 mb-1">Điểm chướng ngại vật</h3>
       @for (revealedCount of obstacleRevealCounts; track revealedCount) {
         <menu-item

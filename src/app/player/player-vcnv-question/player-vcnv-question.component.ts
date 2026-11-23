@@ -8,6 +8,7 @@ import { Role } from '../../core/contracts/api';
 import { VcnvRound } from '../../core/contracts/game';
 import { ApiService } from '../../core/services/api.service';
 import { MediaService } from '../../core/services/media.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 import { SfxService } from '../../core/services/sfx.service';
@@ -39,6 +40,7 @@ const OBSTACLE_PIECES = [
 export class PlayerVcnvQuestionComponent {
   private readonly api = inject(ApiService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly sfx = inject(SfxService);
   private readonly media = inject(MediaService);
   private readonly destroyRef = inject(DestroyRef);
@@ -47,7 +49,7 @@ export class PlayerVcnvQuestionComponent {
   protected readonly hnRowIndices = HN_ROW_INDICES;
 
   protected readonly round = signal<VcnvRound | null>(null);
-  protected readonly currentTime = signal(0);
+  protected readonly currentTime = this.clock.main.seconds;
   protected readonly playerAnswer = signal('');
   protected readonly answerCache = signal('');
   private readonly pieceUrls = signal<Readonly<Record<number, string>>>({});
@@ -104,12 +106,6 @@ export class PlayerVcnvQuestionComponent {
     void this.loadRound();
     this.network.emit('request-live-state');
 
-    effect(() => {
-      const snapshot = this.session.liveState();
-      if (!snapshot) return;
-      this.currentTime.set(snapshot.clock.remaining);
-    });
-
     const offs = [
       this.sfx.onUnlock(() => {
         if (this.pendingAudioFile) {
@@ -120,7 +116,6 @@ export class PlayerVcnvQuestionComponent {
       }),
       this.network.on<[string]>('play-sfx', (code) => this.sfx.play(code)),
       this.network.on<[VcnvRound]>('update-vcnv-data', (data) => this.onRound(data)),
-      this.network.on<[number]>('update-clock', (clock) => this.currentTime.set(clock)),
     ];
     this.destroyRef.onDestroy(() => {
       offs.forEach((off) => off());
@@ -208,7 +203,7 @@ export class PlayerVcnvQuestionComponent {
   }
 
   submitAnswer(): void {
-    if (this.currentTime() <= 0 || !this.playerAnswer().trim()) return;
+    if (!this.clock.main.running() || !this.playerAnswer().trim()) return;
     this.answerCache.set(this.playerAnswer().toUpperCase());
     this.network.emit('submit-answer-vcnv', this.playerAnswer());
     this.playerAnswer.set('');

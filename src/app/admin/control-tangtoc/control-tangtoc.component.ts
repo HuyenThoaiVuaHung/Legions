@@ -23,6 +23,7 @@ import { queryParamState } from '../../core/query-param';
 import { ApiService } from '../../core/services/api.service';
 import { ConfigService } from '../../core/services/config.service';
 import { MediaService } from '../../core/services/media.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 
@@ -59,6 +60,7 @@ import { ResizeGroupDirective } from '../../components/resizable/resize-group.di
 export class ControlTangtocComponent {
   private readonly api = inject(ApiService);
   private readonly network = inject(NetworkService);
+  protected readonly clock = inject(ClockService);
   private readonly dialog = inject(MatDialog);
   private readonly config = inject(ConfigService);
   protected readonly media = inject(MediaService);
@@ -81,7 +83,7 @@ export class ControlTangtocComponent {
   ];
 
   protected readonly round = signal<TtRound | null>(null);
-  protected readonly currentTime = signal(0);
+  protected readonly currentTime = this.clock.main.seconds;
   protected readonly chosenRow = signal<TtQuestion | null>(null);
   protected readonly displayingRow = signal<TtQuestion | null>(null);
   protected readonly displayingVideoUrl = computed(() => {
@@ -110,7 +112,6 @@ export class ControlTangtocComponent {
     const destroyRef = inject(DestroyRef);
     for (const off of [
       this.network.on<[TtRound]>('update-tangtoc-data', (data) => this.round.set(data)),
-      this.network.on<[number]>('update-clock', (clock) => this.currentTime.set(clock)),
     ]) {
       destroyRef.onDestroy(off);
     }
@@ -249,7 +250,7 @@ export class ControlTangtocComponent {
     const round = this.round();
     const answer = round?.playerAnswers[playerIndex];
     if (!round || !answer || answer.timestamp <= 0) return '0s0ms';
-    const passedMs = answer.timestamp - round.timerStartTimestamp;
+    const passedMs = answer.elapsedMs ?? answer.timestamp - round.timerStartTimestamp;
     return `${Math.trunc(passedMs / 1000)}s${passedMs % 1000}ms`;
   }
 
@@ -268,8 +269,6 @@ export class ControlTangtocComponent {
   }
 
   startTimer(seconds: number): void {
-    this.network.emit('update-timer-start-timestamp');
-    this.playSfx(`TT_${seconds}S`);
     this.network.emit('start-clock', seconds);
   }
 

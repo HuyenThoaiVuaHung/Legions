@@ -47,6 +47,8 @@
       <menu-item title="Thí sinh giành quyền" description="">
         @if (round()?.gamemode === 'S') {
           Phần thi cá nhân
+        } @else if (flowTurnName()) {
+          {{ flowTurnName() }}
         } @else if (lastTurnName()) {
           {{ lastTurnName() }}
         } @else {
@@ -57,14 +59,40 @@
         title="Chấm điểm"
         description="Chấm đúng sai cho thí sinh, đối với phần thi cá nhân sẽ tính điểm thí sinh đang thi."
       >
-        <button mat-flat-button (click)="markCorrect()">
-          <mat-icon>done</mat-icon>
-          Đúng
-        </button>
-        <button mat-button (click)="markWrong()">
-          <mat-icon>clear</mat-icon>
-          Sai
-        </button>
+        @if (isMultiplayer()) {
+          <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold bg-secondary-container text-on-secondary-container tabular-nums">
+            {{ phaseLabel() }}
+          </span>
+          <button mat-flat-button [disabled]="!canGrade()" (click)="markCorrect()">
+            <mat-icon>check_circle</mat-icon>
+            Đúng{{ flowTurnName() ? ': ' + flowTurnName() : '' }}
+          </button>
+          <button mat-button [disabled]="!canGrade()" (click)="markWrong()">
+            <mat-icon>cancel</mat-icon>
+            Sai{{ flowTurnName() ? ': ' + flowTurnName() : '' }}
+          </button>
+          <button mat-button [disabled]="!canNoAnswer()" (click)="markNoAnswer()">
+            <mat-icon>timer_off</mat-icon>
+            Không trả lời
+          </button>
+          <button mat-button [disabled]="!canUndo()" (click)="undoMark()">
+            <mat-icon>undo</mat-icon>
+            Hoàn tác
+          </button>
+          <mat-slide-toggle [checked]="autoWrong()" (change)="setAutoWrong($event.checked)">
+            <mat-icon class="align-middle">gavel</mat-icon>
+            Tự động chấm sai
+          </mat-slide-toggle>
+        } @else {
+          <button mat-flat-button (click)="markCorrect()">
+            <mat-icon>done</mat-icon>
+            Đúng
+          </button>
+          <button mat-button (click)="markWrong()">
+            <mat-icon>clear</mat-icon>
+            Sai
+          </button>
+        }
       </menu-item>
       <menu-item title="Âm thanh" description="Âm thanh khoảng trắng & nhạc hiệu">
         <button mat-button (click)="playSfx('BLANK_SPC')">
@@ -104,12 +132,14 @@
           Dừng đồng hồ ({{ currentTime() }}s)
         </button>
       </menu-item>
-      <menu-item title="Đếm ngược">
-        <button mat-button [disabled]="threeSecTimers()[1] > 0" (click)="start3sTimer()">
-          <mat-icon>timer</mat-icon>
-          Đếm ngược 3s
-        </button>
-      </menu-item>
+      @if (!isMultiplayer()) {
+        <menu-item title="Đếm ngược">
+          <button mat-button [disabled]="threeSecTimers()[1] > 0" (click)="start3sTimer()">
+            <mat-icon>timer</mat-icon>
+            Đếm ngược 3s
+          </button>
+        </menu-item>
+      }
       <mat-card appearance="outlined" class="player-table-card">
         <mat-card-header>
           <mat-card-title> Thông tin thí sinh </mat-card-title>

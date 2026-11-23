@@ -32,6 +32,9 @@
   >
     @if (position() === 'KD') {
       <div class="mb-5">Thí sinh giành quyền: {{ kdTurnPlayerName() }}</div>
+      @if (kdFlow.statusText(); as status) {
+        <div class="mb-5">{{ status }}</div>
+      }
       @if (currentKdQuestion(); as question) {
         <div>
           Câu hỏi: {{ question.question }}<br />

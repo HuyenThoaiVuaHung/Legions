@@ -8,8 +8,10 @@ import { ChpQuestion, KdQuestion, RoundDataMap, TtQuestion, VcnvQuestion, VdQues
 import { VCNV_PIECE_COUNT, fetchObstaclePieceUrls } from '../core/vcnv-image.util';
 import { ApiService } from '../core/services/api.service';
 import { MediaService } from '../core/services/media.service';
+import { ClockService } from '../core/services/clock.service';
 import { NetworkService } from '../core/services/network.service';
 import { SessionService } from '../core/services/session.service';
+import { KdFlowService } from '../core/services/kd-flow.service';
 
 /**
  * MC overview screen: live snapshot of the current round question, player
@@ -26,6 +28,7 @@ import { SessionService } from '../core/services/session.service';
 export class McComponent {
   private readonly session = inject(SessionService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly api = inject(ApiService);
   private readonly media = inject(MediaService);
   private readonly destroyRef = inject(DestroyRef);
@@ -38,12 +41,13 @@ export class McComponent {
     return position ? POSITION_LABELS[position] : '';
   });
 
-  readonly clockSeconds = signal(0);
-  private readonly clockPeakSeconds = signal(0);
+  readonly clockSeconds = this.clock.main.seconds;
+  private readonly clockPeakSeconds = this.clock.main.maxSeconds;
 
   readonly kdTurnPlayerIndex = signal<number | null>(null);
-  readonly kdTurnTimerTenths = signal(0);
-  readonly kdAnswerTimerTenths = signal(0);
+  readonly kdTurnTimerTenths = this.clock.kdTurnTenths;
+  protected readonly kdFlow = inject(KdFlowService);
+  readonly kdAnswerTimerTenths = this.clock.kdAnswerTenths;
   readonly stealingPlayerIndex = signal<number | null>(null);
   readonly kdTurnPlayerName = computed(() => {
     const index = this.kdTurnPlayerIndex();
@@ -103,12 +107,8 @@ export class McComponent {
     effect(() => {
       const snapshot = this.session.liveState();
       if (!snapshot) return;
-      this.clockSeconds.set(snapshot.clock.remaining);
-      if (snapshot.clock.maxSeconds > 0) this.clockPeakSeconds.set(snapshot.clock.maxSeconds);
       this.currentKdQuestion.set(snapshot.kd.question);
       this.kdTurnPlayerIndex.set(snapshot.kd.turnPlayerIndex >= 0 ? snapshot.kd.turnPlayerIndex : null);
-      this.kdAnswerTimerTenths.set(snapshot.kd.decisionTimerOwner === 'player' ? snapshot.kd.decisionRemaining : 0);
-      this.kdTurnTimerTenths.set(snapshot.kd.decisionTimerOwner === 'admin' ? snapshot.kd.decisionRemaining : 0);
       this.currentVcnvQuestion.set(snapshot.vcnv.question);
       this.currentTtQuestion.set(snapshot.tt.question);
       this.currentVdQuestion.set(snapshot.vd.question);
@@ -167,10 +167,6 @@ export class McComponent {
       this.network.on<[RoundDataMap['vd']]>('update-vedich-data', (round) =>
         this.vdRound.set(round),
       ),
-      this.network.on<[number]>('update-clock', (seconds) => {
-        if (this.clockSeconds() === 0) this.clockPeakSeconds.set(seconds);
-        this.clockSeconds.set(seconds);
-      }),
       this.network.on<[number]>('player-got-turn-kd', (playerIndex) =>
         this.kdTurnPlayerIndex.set(playerIndex),
       ),
@@ -178,10 +174,6 @@ export class McComponent {
       // Old code reset the turn to a bare 0 here, which broke the turn-name
       // lookup on the next render — treat it the same as clearing the turn.
       this.network.on<[]>('next-question', () => this.kdTurnPlayerIndex.set(null)),
-      this.network.on<[number, boolean]>('update-3s-timer-kd', (tenths, isAnswerTimer) => {
-        if (isAnswerTimer) this.kdAnswerTimerTenths.set(tenths);
-        else this.kdTurnTimerTenths.set(tenths);
-      }),
       this.network.on<[number]>('player-steal-question', (playerIndex) =>
         this.stealingPlayerIndex.set(playerIndex),
       ),

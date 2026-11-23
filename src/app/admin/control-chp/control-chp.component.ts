@@ -17,6 +17,7 @@ import { MenuItemComponent } from '../../components/menu-item/menu-item.componen
 import { ChpQuestion, ChpRound, Player } from '../../core/contracts/game';
 import { queryParamState } from '../../core/query-param';
 import { ApiService } from '../../core/services/api.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 
@@ -46,6 +47,7 @@ import { ResizeGroupDirective } from '../../components/resizable/resize-group.di
 export class ControlChpComponent {
   private readonly api = inject(ApiService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly dialog = inject(MatDialog);
   protected readonly session = inject(SessionService);
 
@@ -63,7 +65,7 @@ export class ControlChpComponent {
   ];
 
   protected readonly round = signal<ChpRound | null>(null);
-  protected readonly currentTime = signal(0);
+  protected readonly currentTime = this.clock.main.seconds;
   protected readonly chosenRow = signal<ChpQuestion | null>(null);
   protected readonly displayingRow = signal<ChpQuestion | null>(null);
   /** 0-based index of the player who buzzed in; null when nobody did. */
@@ -89,7 +91,6 @@ export class ControlChpComponent {
     const destroyRef = inject(DestroyRef);
     for (const off of [
       this.network.on<[ChpRound]>('update-chp-data', (data) => this.round.set(data)),
-      this.network.on<[number]>('update-clock', (clock) => this.currentTime.set(clock)),
       this.network.on<[number]>('got-turn-chp', (playerIndex) =>
         this.lastTurnIndex.set(playerIndex),
       ),

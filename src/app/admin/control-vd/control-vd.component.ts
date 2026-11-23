@@ -19,6 +19,7 @@ import { VideoControlBarComponent } from '../../components/video-control-bar/vid
 import { Player, VdQuestion, VdRound } from '../../core/contracts/game';
 import { ApiService } from '../../core/services/api.service';
 import { MediaService } from '../../core/services/media.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 import { queryParamState } from '../../core/query-param';
@@ -60,6 +61,7 @@ export class ControlVdComponent {
   private readonly api = inject(ApiService);
   private readonly media = inject(MediaService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly dialog = inject(MatDialog);
   protected readonly session = inject(SessionService);
 
@@ -79,7 +81,7 @@ export class ControlVdComponent {
   protected readonly pickerSlots30 = [3, 4, 5];
 
   protected readonly round = signal<VdRound | null>(null);
-  protected readonly currentTime = signal(0);
+  protected readonly currentTime = this.clock.main.seconds;
   protected readonly displayingRow = signal<VdQuestion | null>(null);
   protected readonly displayingVideoUrl = computed(() => {
     const row = this.displayingRow();
@@ -113,7 +115,6 @@ export class ControlVdComponent {
     const destroyRef = inject(DestroyRef);
     for (const off of [
       this.network.on<[VdRound]>('update-vedich-data', (data) => this.round.set(data)),
-      this.network.on<[number]>('update-clock', (clock) => this.currentTime.set(clock)),
       this.network.on<[number]>('player-steal-question', (playerIndex) => {
         this.playSfx('VD_STEAL_Q');
         this.stealingPlayerIndex.set(playerIndex);
@@ -282,7 +283,6 @@ export class ControlVdComponent {
 
   startTimer(seconds: number): void {
     this.network.emit('start-clock', seconds);
-    this.playSfx(`VD_${seconds}S`);
   }
 
   togglePlayVideo(): void {

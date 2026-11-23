@@ -1,9 +1,11 @@
 import { NgClass } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { KdQuestion } from '../../core/contracts/game';
+import { ClockService } from '../../core/services/clock.service';
 import { ConnectionStatus, NetworkService } from '../../core/services/network.service';
 import { MediaService } from '../../core/services/media.service';
 import { SessionService } from '../../core/services/session.service';
+import { KdFlowService } from '../../core/services/kd-flow.service';
 
 /**
  * KD (Khởi động) broadcast overlay: current question, turn indicator and
@@ -19,7 +21,9 @@ import { SessionService } from '../../core/services/session.service';
 export class ScKhoiDongComponent {
   private readonly session = inject(SessionService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly media = inject(MediaService);
+  protected readonly kdFlow = inject(KdFlowService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly players = computed(() => this.session.match()?.players ?? []);
@@ -28,10 +32,10 @@ export class ScKhoiDongComponent {
   readonly questionNumber = signal(0);
   readonly maxQuestionCount = signal(0);
   readonly turnPlayerIndex = signal<number | null>(null);
-  readonly clockSeconds = signal(0);
+  readonly clockSeconds = this.clock.main.seconds;
   /** Tenths of a second left on the "get the turn" / "answer" buzzer windows. */
-  readonly turnTimerTenths = signal(0);
-  readonly answerTimerTenths = signal(0);
+  readonly turnTimerTenths = this.clock.kdTurnTenths;
+  readonly answerTimerTenths = this.clock.kdAnswerTenths;
 
   constructor() {
     // Overlay pages are opened directly (OBS browser source) rather than
@@ -52,11 +56,6 @@ export class ScKhoiDongComponent {
         this.turnPlayerIndex.set(playerIndex),
       ),
       this.network.on<[]>('clear-turn-player-kd', () => this.turnPlayerIndex.set(null)),
-      this.network.on<[number]>('update-clock', (seconds) => this.clockSeconds.set(seconds)),
-      this.network.on<[number, boolean]>('update-3s-timer-kd', (tenths, isAnswerTimer) => {
-        if (isAnswerTimer) this.answerTimerTenths.set(tenths);
-        else this.turnTimerTenths.set(tenths);
-      }),
     ];
     this.destroyRef.onDestroy(() => unsubs.forEach((unsub) => unsub()));
   }

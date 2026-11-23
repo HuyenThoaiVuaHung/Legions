@@ -22,6 +22,7 @@ import { Player, VcnvObstacle, VcnvQuestion, VcnvRound } from '../../core/contra
 import { queryParamState } from '../../core/query-param';
 import { ApiService } from '../../core/services/api.service';
 import { MediaService } from '../../core/services/media.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 
@@ -63,6 +64,7 @@ import { ResizeGroupDirective } from '../../components/resizable/resize-group.di
 export class ControlVcnvComponent {
   private readonly api = inject(ApiService);
   private readonly network = inject(NetworkService);
+  protected readonly clock = inject(ClockService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   protected readonly media = inject(MediaService);
@@ -92,7 +94,7 @@ export class ControlVcnvComponent {
   ];
 
   protected readonly round = signal<VcnvRound | null>(null);
-  protected readonly currentTime = signal(0);
+  protected readonly currentTime = this.clock.main.seconds;
   protected readonly chosenRow = signal<VcnvQuestion | null>(null);
   protected readonly displayingRow = signal<VcnvQuestion | null>(null);
   /** Obstacle marking checkboxes, indexed by player index. */
@@ -139,7 +141,6 @@ export class ControlVcnvComponent {
     const destroyRef = inject(DestroyRef);
     for (const off of [
       this.network.on<[VcnvRound]>('update-vcnv-data', (data) => this.round.set(data)),
-      this.network.on<[number]>('update-clock', (clock) => this.currentTime.set(clock)),
     ]) {
       destroyRef.onDestroy(off);
     }
@@ -356,7 +357,6 @@ export class ControlVcnvComponent {
   }
 
   start15sTimer(): void {
-    this.playSfx('VCNV_15S');
     this.network.emit('start-clock', 15);
   }
 

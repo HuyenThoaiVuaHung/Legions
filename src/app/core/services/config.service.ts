@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PublicUi } from '../contracts/api';
+import { KdTimeUpMode } from '../contracts/game';
 import { NetworkService } from './network.service';
 
 /**
@@ -9,20 +10,30 @@ import { NetworkService } from './network.service';
  * GET /api/config (keep the shapes in sync with legendary's
  * src/http/config.routes.ts + src/game.rules.ts).
  */
+export const CLOCK_ROUNDS = ['KD', 'VCNV', 'TT', 'VD', 'CHP'] as const;
+export type ClockRound = (typeof CLOCK_ROUNDS)[number];
+
 export interface GameRules {
   playerCount: number;
-  mainClockTickMs: number;
-  decisionTickMs: number;
+  /** Delay before a started main clock begins counting, per round (ms). */
+  clockStartDelayMs: Record<ClockRound, number>;
+  /** Late-submission window after a clock expires (ms). */
+  submissionGraceMs: number;
   kdCorrectPoints: number;
   kdWrongPenalty: number;
-  kdDecisionTicks: number;
-  kdClockStartDelayMs: number;
+  kdDecisionMs: number;
+  /** Multiplayer KD: pause between the question and the buzzer opening (ms). */
+  kdBuzzArmDelayMs: number;
+  /** Multiplayer KD: how long the buzzer stays open (ms). */
+  kdBuzzWindowMs: number;
+  /** Multiplayer KD: what happens when the answer/buzz window runs out. */
+  kdTimeUpMode: KdTimeUpMode;
   vcnvRowPoints: number;
   obstacleValueByRevealedCount: Record<number, number>;
   ttPointsByPlacement: number[];
   ttQuestionSeconds: number[];
   ttVideoSeconds: number;
-  vdStealTicks: number;
+  vdStealMs: number;
   vdWrongPenaltyDivisor: number;
   vdHopeStarMultiplier: number;
   chpTurnSeconds: number;
@@ -39,18 +50,20 @@ export interface PublicConfig {
 /** Defaults used until the server config loads (and if it can't be reached). */
 const DEFAULT_RULES: Readonly<GameRules> = {
   playerCount: 4,
-  mainClockTickMs: 1000,
-  decisionTickMs: 100,
+  clockStartDelayMs: { KD: 1000, VCNV: 1000, TT: 1000, VD: 1000, CHP: 0 },
+  submissionGraceMs: 250,
   kdCorrectPoints: 10,
   kdWrongPenalty: 5,
-  kdDecisionTicks: 30,
-  kdClockStartDelayMs: 1000,
+  kdDecisionMs: 3000,
+  kdBuzzArmDelayMs: 300,
+  kdBuzzWindowMs: 3000,
+  kdTimeUpMode: 'manual',
   vcnvRowPoints: 10,
   obstacleValueByRevealedCount: { 0: 60, 1: 60, 2: 50, 3: 40, 4: 30, 5: 20 },
   ttPointsByPlacement: [40, 30, 20, 10],
   ttQuestionSeconds: [20, 20, 30, 30],
   ttVideoSeconds: 30,
-  vdStealTicks: 50,
+  vdStealMs: 5000,
   vdWrongPenaltyDivisor: 2,
   vdHopeStarMultiplier: 2,
   chpTurnSeconds: 15,
@@ -60,6 +73,7 @@ const DEFAULT_RULES: Readonly<GameRules> = {
 function copyRules(rules: GameRules): GameRules {
   return {
     ...rules,
+    clockStartDelayMs: { ...DEFAULT_RULES.clockStartDelayMs, ...rules.clockStartDelayMs },
     obstacleValueByRevealedCount: { ...rules.obstacleValueByRevealedCount },
     ttPointsByPlacement: [...rules.ttPointsByPlacement],
     ttQuestionSeconds: [...(rules.ttQuestionSeconds ?? DEFAULT_RULES.ttQuestionSeconds)],

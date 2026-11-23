@@ -3,6 +3,7 @@ import { MatFabButton } from '@angular/material/button';
 import { Role } from '../../core/contracts/api';
 import { ChpQuestion, ChpRound } from '../../core/contracts/game';
 import { ApiService } from '../../core/services/api.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 import { SfxService } from '../../core/services/sfx.service';
@@ -18,6 +19,7 @@ import { PlayerListComponent } from '../../components/player-list/player-list.co
 export class PlayerChpComponent {
   private readonly api = inject(ApiService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly sfx = inject(SfxService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly session = inject(SessionService);
@@ -25,7 +27,7 @@ export class PlayerChpComponent {
 
   protected readonly round = signal<ChpRound | null>(null);
   protected readonly question = signal<ChpQuestion | null>(null);
-  protected readonly time = signal(0);
+  protected readonly time = this.clock.main.seconds;
   protected readonly turnIndex = signal(-1);
   protected readonly answerButtonDisabled = signal(true);
 
@@ -46,7 +48,6 @@ export class PlayerChpComponent {
     effect(() => {
       const snapshot = this.session.liveState();
       if (!snapshot) return;
-      this.time.set(snapshot.clock.remaining);
       this.question.set(snapshot.chp.question);
       this.turnIndex.set(snapshot.chp.turnPlayerIndex);
       const alreadyPlayed = untracked(() => {
@@ -65,7 +66,6 @@ export class PlayerChpComponent {
       this.network.on<[]>('clear-turn-chp', () => this.turnIndex.set(-1)),
       this.network.on<[]>('unlock-button-chp', () => this.answerButtonDisabled.set(false)),
       this.network.on<[]>('lock-button-chp', () => this.answerButtonDisabled.set(true)),
-      this.network.on<[number]>('update-clock', (clock) => this.time.set(clock)),
       this.network.on<[ChpRound]>('update-chp-data', (data) => this.round.set(data)),
     ];
     this.destroyRef.onDestroy(() => offs.forEach((off) => off()));

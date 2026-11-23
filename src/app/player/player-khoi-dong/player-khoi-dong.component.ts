@@ -5,9 +5,11 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { ApiService } from '../../core/services/api.service';
 import { MediaService } from '../../core/services/media.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 import { SfxService } from '../../core/services/sfx.service';
+import { KdFlowService } from '../../core/services/kd-flow.service';
 import { KdQuestion, KdRound } from '../../core/contracts/game';
 import { Role } from '../../core/contracts/api';
 import { PlayerListComponent } from '../../components/player-list/player-list.component';
@@ -32,6 +34,7 @@ import { PlayerListComponent } from '../../components/player-list/player-list.co
 export class PlayerKhoiDongComponent {
   private readonly api = inject(ApiService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly sfx = inject(SfxService);
   private readonly media = inject(MediaService);
   private readonly destroyRef = inject(DestroyRef);
@@ -42,9 +45,15 @@ export class PlayerKhoiDongComponent {
   protected readonly question = signal<KdQuestion | null>(null);
   protected readonly previousAnswer = signal<string | null>(null);
   protected readonly turnIndex = signal(-1);
-  protected readonly answerButtonDisabled = signal(true);
-  protected readonly timerBuzz = signal(0);
-  protected readonly timerAnswer = signal(0);
+  protected readonly kdFlow = inject(KdFlowService);
+  /** Legacy enable/disable events; only consulted when the server sends no flow state. */
+  private readonly legacyButtonDisabled = signal(true);
+  protected readonly answerButtonDisabled = computed(() => {
+    const open = this.kdFlow.buzzerOpen();
+    return open === null ? this.legacyButtonDisabled() : !open;
+  });
+  protected readonly timerBuzz = this.clock.kdTurnTenths;
+  protected readonly timerAnswer = this.clock.kdAnswerTenths;
 
   protected readonly isPlayer = computed(() => this.session.role() === Role.Player);
   protected readonly isMultiplayer = computed(() => this.round()?.gamemode === 'M');
@@ -109,10 +118,8 @@ export class PlayerKhoiDongComponent {
         this.questionNo.set(kd.currentQuestionNo > 0 ? kd.currentQuestionNo : (kd.question ? 1 : 0));
       }
       this.turnIndex.set(kd.turnPlayerIndex);
-      this.answerButtonDisabled.set(!kd.buzzerOpen);
+      this.legacyButtonDisabled.set(!kd.buzzerOpen);
       this.previousAnswer.set(kd.previousAnswer);
-      this.timerAnswer.set(kd.decisionTimerOwner === 'player' ? kd.decisionRemaining : 0);
-      this.timerBuzz.set(kd.decisionTimerOwner === 'admin' ? kd.decisionRemaining : 0);
       this.applyQuestion(kd.question);
     });
 
@@ -128,13 +135,9 @@ export class PlayerKhoiDongComponent {
       this.network.on<[KdQuestion]>('update-kd-question', (data) => this.onQuestion(data)),
       this.network.on<[number]>('player-got-turn-kd', (playerIndex) => this.turnIndex.set(playerIndex)),
       this.network.on<[]>('clear-turn-player-kd', () => this.turnIndex.set(-1)),
-      this.network.on<[]>('enable-answer-button-kd', () => this.answerButtonDisabled.set(false)),
-      this.network.on<[]>('disable-answer-button-kd', () => this.answerButtonDisabled.set(true)),
+      this.network.on<[]>('enable-answer-button-kd', () => this.legacyButtonDisabled.set(false)),
+      this.network.on<[]>('disable-answer-button-kd', () => this.legacyButtonDisabled.set(true)),
       this.network.on<[]>('stop-kd-sound', () => this.sfx.stopLoop()),
-      this.network.on<[number, boolean]>('update-3s-timer-kd', (time, isPlayerTimer) => {
-        if (isPlayerTimer) this.timerAnswer.set(time);
-        else this.timerBuzz.set(time);
-      }),
       this.network.on<[Partial<KdRound>]>('update-kd-data', (data) => {
         if (data) this.round.set(data as KdRound);
       }),

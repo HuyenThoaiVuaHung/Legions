@@ -59,7 +59,7 @@ export class PlayerTangtocAComponent {
   getTimePassed(answer: TtAnswer): string {
     const round = this.round();
     if (!round || answer.timestamp <= 0) return '0s0ms';
-    const elapsedMs = answer.timestamp - round.timerStartTimestamp;
+    const elapsedMs = answer.elapsedMs ?? answer.timestamp - round.timerStartTimestamp;
     return `${Math.trunc(elapsedMs / 1000)}s${elapsedMs % 1000}ms`;
   }
 }

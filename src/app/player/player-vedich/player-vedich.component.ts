@@ -6,6 +6,7 @@ import { Role } from '../../core/contracts/api';
 import { VdQuestion, VdRound } from '../../core/contracts/game';
 import { ApiService } from '../../core/services/api.service';
 import { MediaService } from '../../core/services/media.service';
+import { ClockService } from '../../core/services/clock.service';
 import { NetworkService } from '../../core/services/network.service';
 import { SessionService } from '../../core/services/session.service';
 import { SfxService } from '../../core/services/sfx.service';
@@ -36,6 +37,7 @@ const QUESTION_PICKER_ROWS = [
 export class PlayerVedichComponent {
   private readonly api = inject(ApiService);
   private readonly network = inject(NetworkService);
+  private readonly clock = inject(ClockService);
   private readonly sfx = inject(SfxService);
   protected readonly media = inject(MediaService);
   private readonly destroyRef = inject(DestroyRef);
@@ -45,9 +47,9 @@ export class PlayerVedichComponent {
 
   protected readonly round = signal<VdRound | null>(null);
   protected readonly currentQuestion = signal<VdQuestion | null>(null);
-  protected readonly currentTime = signal(0);
-  protected readonly maxTime = signal(0);
-  protected readonly fiveSecTimer = signal(0);
+  protected readonly currentTime = this.clock.main.seconds;
+  protected readonly maxTime = this.clock.main.maxSeconds;
+  protected readonly fiveSecTimer = this.clock.vdSteal.tenths;
   protected readonly stealingPlayerIndex = signal(-1);
   protected readonly buttonDisabled = signal(true);
 
@@ -65,11 +67,8 @@ export class PlayerVedichComponent {
     effect(() => {
       const snapshot = this.session.liveState();
       if (!snapshot) return;
-      this.currentTime.set(snapshot.clock.remaining);
-      if (snapshot.clock.maxSeconds > 0) this.maxTime.set(snapshot.clock.maxSeconds);
       this.stealingPlayerIndex.set(snapshot.vd.stealingPlayerIndex);
       this.buttonDisabled.set(!snapshot.vd.stealWindowOpen);
-      this.fiveSecTimer.set(snapshot.vd.stealRemaining);
       this.onQuestion(snapshot.vd.question);
     });
 
@@ -84,10 +83,8 @@ export class PlayerVedichComponent {
       this.network.on<[string]>('play-sfx', (code) => this.sfx.play(code)),
       this.network.on<[VdRound]>('update-vedich-data', (data) => this.round.set(data)),
       this.network.on<[VdQuestion | undefined]>('update-vedich-question', (q) => this.onQuestion(q ?? null)),
-      this.network.on<[number]>('update-clock', (clock) => this.onClock(clock)),
       this.network.on<[]>('unlock-button-vd', () => this.buttonDisabled.set(false)),
       this.network.on<[]>('lock-button-vd', () => this.buttonDisabled.set(true)),
-      this.network.on<[number]>('update-5s-countdown-vd', (counter) => this.fiveSecTimer.set(counter)),
       this.network.on<[number]>('player-steal-question', (playerIndex) => this.stealingPlayerIndex.set(playerIndex)),
       this.network.on<[]>('clear-stealing-player', () => this.stealingPlayerIndex.set(-1)),
     ];
@@ -141,11 +138,6 @@ export class PlayerVedichComponent {
     this.audio = null;
     this.audioFile = null;
     this.pendingAudioFile = null;
-  }
-
-  private onClock(clock: number): void {
-    if (this.currentTime() === 0) this.maxTime.set(clock);
-    this.currentTime.set(clock);
   }
 
   stealQuestion(): void {

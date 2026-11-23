@@ -66,6 +66,9 @@
           <span class="kd-meta-label opacity-0" aria-hidden="true">Chờ</span>
         }
       </div>
+      @if (isMultiplayer() && kdFlow.statusText(); as status) {
+        <span class="kd-meta-label">{{ status }}</span>
+      }
 
       <player-list
         [players]="session.match()?.players ?? []"
@@ -123,6 +126,8 @@
         @if (activeTimer(); as timer) {
           <span class="text-2xl font-bold tabular-nums">{{ timer.seconds }}s</span>
           <span class="kd-meta-label ml-2">{{ timer.label }}</span>
+        } @else if (isMultiplayer() && kdFlow.statusText(); as status) {
+          <span class="kd-meta-label">{{ status }}</span>
         }
       </div>
     </div>

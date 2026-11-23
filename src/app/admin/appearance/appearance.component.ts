@@ -23,7 +23,7 @@ import { BrandAssetKey, BrandSlot } from '../../core/contracts/api';
 import { SessionService } from '../../core/services/session.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MATCH_POSITIONS, MatchPosition } from '../../core/contracts/game';
-import { GameRules } from '../../core/services/config.service';
+import { CLOCK_ROUNDS, ClockRound, GameRules } from '../../core/services/config.service';
 import { ApiService } from '../../core/services/api.service';
 import { AssetService } from '../../core/services/asset.service';
 import { ConfigService } from '../../core/services/config.service';
@@ -53,7 +53,7 @@ const BRAND_ASSETS: readonly BrandAsset[] = [
 /** One editable numeric rule field, grouped into an operator-style tile. */
 type NumericRuleKey = Exclude<
   keyof GameRules,
-  'playerCount' | 'obstacleValueByRevealedCount' | 'ttPointsByPlacement'
+  'playerCount' | 'obstacleValueByRevealedCount' | 'ttPointsByPlacement' | 'ttQuestionSeconds' | 'clockStartDelayMs' | 'kdTimeUpMode'
 >;
 
 type EditableGameRules = Omit<GameRules, 'playerCount'>;
@@ -77,8 +77,9 @@ const RULE_GROUPS: RuleGroup[] = [
     fields: [
       { key: 'kdCorrectPoints', label: 'Điểm trả lời đúng', description: 'Điểm cộng khi thí sinh trả lời đúng.', suffix: 'điểm', min: 0 },
       { key: 'kdWrongPenalty', label: 'Điểm trừ trả lời sai', description: 'Điểm trừ khi bấm chuông và trả lời sai (chế độ đối kháng).', suffix: 'điểm', min: 0 },
-      { key: 'kdDecisionTicks', label: 'Số nhịp suy nghĩ', description: 'Số nhịp của cửa sổ trả lời sau khi bấm chuông (nhịp × ms).', min: 1 },
-      { key: 'kdClockStartDelayMs', label: 'Độ trễ khởi động đồng hồ', description: 'Khoảng chờ trước khi đồng hồ Khởi động bắt đầu chạy.', suffix: 'ms', min: 0 },
+      { key: 'kdDecisionMs', label: 'Thời gian trả lời', description: 'Cửa sổ trả lời sau khi thí sinh bấm chuông (đối kháng).', suffix: 'ms', min: 1 },
+      { key: 'kdBuzzArmDelayMs', label: 'Độ trễ mở chuông', description: 'Khoảng chờ từ lúc phát câu hỏi đến khi chuông mở (đối kháng).', suffix: 'ms', min: 0 },
+      { key: 'kdBuzzWindowMs', label: 'Thời gian bấm chuông', description: 'Cửa sổ để thí sinh bấm chuông sau khi chuông mở (đối kháng).', suffix: 'ms', min: 1 },
     ],
   },
   {
@@ -90,7 +91,7 @@ const RULE_GROUPS: RuleGroup[] = [
   {
     title: 'Về đích',
     fields: [
-      { key: 'vdStealTicks', label: 'Số nhịp cướp câu', description: 'Số nhịp của cửa sổ cướp câu hỏi (nhịp × ms).', min: 1 },
+      { key: 'vdStealMs', label: 'Thời gian cướp câu', description: 'Cửa sổ cướp câu hỏi.', suffix: 'ms', min: 1 },
       { key: 'vdWrongPenaltyDivisor', label: 'Hệ số trừ khi sai', description: 'Trả lời sai bị trừ (giá trị câu ÷ hệ số này).', min: 1 },
       { key: 'vdHopeStarMultiplier', label: 'Hệ số Ngôi sao hy vọng', description: 'Nhân điểm khi chọn Ngôi sao hy vọng và trả lời đúng.', suffix: '×', min: 1 },
     ],
@@ -105,8 +106,7 @@ const RULE_GROUPS: RuleGroup[] = [
   {
     title: 'Đồng hồ',
     fields: [
-      { key: 'mainClockTickMs', label: 'Nhịp đồng hồ chính', description: 'Khoảng thời gian mỗi nhịp đếm ngược chính.', suffix: 'ms', min: 1 },
-      { key: 'decisionTickMs', label: 'Nhịp đồng hồ nhanh', description: 'Khoảng thời gian mỗi nhịp của các đồng hồ quyết định.', suffix: 'ms', min: 1 },
+      { key: 'submissionGraceMs', label: 'Độ trễ chấp nhận', description: 'Khoảng bù trễ mạng: câu trả lời đến muộn trong khoảng này vẫn được nhận.', suffix: 'ms', min: 0 },
     ],
   },
 ];
@@ -245,6 +245,7 @@ export class AppearanceComponent {
     const { playerCount: _playerCount, ...rules } = this.config.rules();
     return {
       ...rules,
+      clockStartDelayMs: { ...rules.clockStartDelayMs },
       obstacleValueByRevealedCount: { ...rules.obstacleValueByRevealedCount },
       ttPointsByPlacement: [...rules.ttPointsByPlacement],
     };
@@ -254,6 +255,25 @@ export class AppearanceComponent {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return;
     this.draft.update((draft) => ({ ...draft, [key]: parsed }));
+  }
+
+  protected readonly clockRounds = CLOCK_ROUNDS;
+  protected readonly clockRoundLabels: Record<ClockRound, string> = {
+    KD: 'Khởi động',
+    VCNV: 'Vượt chướng ngại vật',
+    TT: 'Tăng tốc',
+    VD: 'Về đích',
+    CHP: 'Câu hỏi phụ',
+  };
+
+  setClockDelay(round: ClockRound, value: number | string): void {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    this.draft.update((draft) => ({ ...draft, clockStartDelayMs: { ...draft.clockStartDelayMs, [round]: parsed } }));
+  }
+
+  setAutoWrong(on: boolean): void {
+    this.draft.update((draft) => ({ ...draft, kdTimeUpMode: on ? 'autoWrong' : 'manual' }));
   }
 
   setObstacleValue(revealedCount: number, value: number | string): void {

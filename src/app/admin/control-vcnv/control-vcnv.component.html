@@ -132,7 +132,7 @@
             </editable-table>
           </mat-card-content>
           <mat-card-actions align="end">
-            <button mat-flat-button [disabled]="currentTime() > 0" (click)="submitMark()">
+            <button mat-flat-button [disabled]="clock.main.running()" (click)="submitMark()">
               Xác Nhận
             </button>
             <button

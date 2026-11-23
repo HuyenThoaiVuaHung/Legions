@@ -99,6 +99,12 @@ export class NetworkService {
     this.socketRef?.emit(event, ...args);
   }
 
+  /** Emit and wait for the server's ack (2 s timeout). Rejects when offline or on timeout. */
+  emitWithAck(event: string, ...args: unknown[]): Promise<unknown> {
+    if (!this.socketRef) return Promise.reject(new Error('socket not connected'));
+    return this.socketRef.timeout(2000).emitWithAck(event, ...args);
+  }
+
   get connected(): boolean {
     return this.status() === ConnectionStatus.Connected;
   }
